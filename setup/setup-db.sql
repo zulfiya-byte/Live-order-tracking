@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS local_reference.clients (
 -- Sample client — replace password_hash with real bcrypt hash before use.
 -- Generate hash: python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('YourPassword123'))"
 INSERT INTO local_reference.clients (email, password_hash, company_name)
-VALUES ('client@example.com', '$2b$12$PLACEHOLDER_REPLACE_WITH_REAL_HASH', 'PXP Solutions')
-ON DUPLICATE KEY UPDATE company_name = VALUES(company_name);
+VALUES ('client@example.com', '$2b$12$IteTAzOIojaNQXA9QimmLeFwI2cBBqA4KRBafhh9OKp.5zdBk0.sm', 'PXP Solutions')
+ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), company_name = VALUES(company_name);
