@@ -29,6 +29,8 @@ function AddClientModal({ onSave, onClose }) {
   const [form, setForm]                   = useState({ email: '', company_name: '', is_admin: false, password: '' })
   const [saving, setSaving]               = useState(false)
   const [error, setError]                 = useState('')
+  const [inviteUrl, setInviteUrl]         = useState('')
+  const [copied, setCopied]               = useState(false)
   const [companySuggestions, setCompanySuggestions] = useState([])
   const [showCompanyDrop, setShowCompanyDrop]       = useState(false)
   // Contact access
@@ -81,8 +83,11 @@ function AddClientModal({ onSave, onClose }) {
       if (result?.id && contacts.length > 0) {
         await Promise.all(contacts.map(c => adminAddContact(result.id, c)))
       }
-      if (result?.email_error) {
-        setError(`Account created but invite email failed: ${result.email_error}. Use "Resend Invite" from the client panel.`)
+      if (result?.invite_url) {
+        if (result?.email_error) {
+          setError('Email could not be sent — copy the invite link below and send it manually.')
+        }
+        setInviteUrl(result.invite_url)
         return
       }
       onClose()
@@ -219,15 +224,38 @@ function AddClientModal({ onSave, onClose }) {
             </div>
           </div>
 
-          {/* Info box */}
-          <div className="flex items-start gap-2.5 rounded-xl px-3 py-2.5" style={{ background: '#E0F5FB', border: '1px solid #BAE6FD' }}>
-            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="#0369A1" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            <p className="text-xs leading-relaxed" style={{ color: '#0369A1' }}>
-              An invite email will be sent with a link to create their password. The link expires after <strong>72 hours</strong>.
-            </p>
-          </div>
+          {/* Invite link — shown after account is created */}
+          {inviteUrl ? (
+            <div className="rounded-xl overflow-hidden" style={{ border: '1.5px solid #BBF7D0' }}>
+              <div className="px-3 py-2.5 flex items-center gap-2" style={{ background: '#F0FDF4' }}>
+                <svg className="w-4 h-4 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs font-semibold text-green-800">Account created — copy and send this link to the client</p>
+              </div>
+              <div className="px-3 py-2.5 bg-white flex items-center gap-2">
+                <p className="text-xs text-slate-500 font-mono truncate flex-1">{inviteUrl}</p>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(inviteUrl); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                  className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+                  style={{ background: copied ? '#F0FDF4' : '#EFF6FF', color: copied ? '#16A34A' : '#2563EB' }}
+                >
+                  {copied ? '✓ Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="px-3 pb-2.5 text-xs text-slate-400">Link expires in 72 hours.</p>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2.5 rounded-xl px-3 py-2.5" style={{ background: '#E0F5FB', border: '1px solid #BAE6FD' }}>
+              <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="#0369A1" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <p className="text-xs leading-relaxed" style={{ color: '#0369A1' }}>
+                An invite link will be generated. Copy and send it to the client — expires after <strong>72 hours</strong>.
+              </p>
+            </div>
+          )}
 
           {error && (
             <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
@@ -292,6 +320,8 @@ export default function AdminPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [editPassword, setEditPassword] = useState('')
   const [showPwForm, setShowPwForm]     = useState(false)
+  const [resendLink, setResendLink]     = useState('')
+  const [resendCopied, setResendCopied] = useState(false)
   const [search, setSearch]             = useState('')
   const [saving, setSaving]             = useState(false)
   const [resending, setResending]       = useState(false)
@@ -357,9 +387,10 @@ export default function AdminPage() {
 
   async function handleResendInvite() {
     setResending(true)
+    setResendLink('')
     try {
-      await adminResendInvite(selectedId)
-      alert('Invite email resent successfully.')
+      const result = await adminResendInvite(selectedId)
+      setResendLink(result?.invite_url || '')
       await fetchClients()
     } catch (e) {
       alert(e.message)
@@ -605,32 +636,52 @@ export default function AdminPage() {
 
               {/* Resend invite — only shown if account not yet activated */}
               {selected.invite_status !== 'active' && (
-                <div className="rounded-xl px-4 py-3.5 flex items-center justify-between gap-3"
-                  style={{ background: selected.invite_status === 'expired' ? '#FEF2F2' : '#FFFBEB', border: `1px solid ${selected.invite_status === 'expired' ? '#FECACA' : '#FDE68A'}` }}>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: selected.invite_status === 'expired' ? '#991B1B' : '#92400E' }}>
-                      {selected.invite_status === 'expired' ? 'Invite link expired' : 'Awaiting activation'}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: selected.invite_status === 'expired' ? '#B91C1C' : '#B45309' }}>
-                      {selected.invite_status === 'expired'
-                        ? 'The client never used their invite. Send a new one.'
-                        : 'Client has been sent an invite but hasn\'t set their password yet.'}
-                    </p>
+                <>
+                  <div className="rounded-xl px-4 py-3.5 flex items-center justify-between gap-3"
+                    style={{ background: selected.invite_status === 'expired' ? '#FEF2F2' : '#FFFBEB', border: `1px solid ${selected.invite_status === 'expired' ? '#FECACA' : '#FDE68A'}` }}>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: selected.invite_status === 'expired' ? '#991B1B' : '#92400E' }}>
+                        {selected.invite_status === 'expired' ? 'Invite link expired' : 'Awaiting activation'}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: selected.invite_status === 'expired' ? '#B91C1C' : '#B45309' }}>
+                        {selected.invite_status === 'expired'
+                          ? 'The client never used their invite. Send a new one.'
+                          : 'Client has been sent an invite but hasn\'t set their password yet.'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleResendInvite}
+                      disabled={resending}
+                      className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50"
+                    >
+                      {resending
+                        ? <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                      }
+                      {resending ? 'Sending…' : 'Resend Invite'}
+                    </button>
                   </div>
-                  <button
-                    onClick={handleResendInvite}
-                    disabled={resending}
-                    className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50"
-                  >
-                    {resending
-                      ? <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                    }
-                    {resending ? 'Sending…' : 'Resend Invite'}
-                  </button>
-                </div>
+                  {resendLink && (
+                    <div className="rounded-xl overflow-hidden" style={{ border: '1.5px solid #BBF7D0' }}>
+                      <div className="px-3 py-2.5 flex items-center gap-2" style={{ background: '#F0FDF4' }}>
+                        <p className="text-xs font-semibold text-green-800">Invite link — copy and send to client</p>
+                      </div>
+                      <div className="px-3 py-2 bg-white flex items-center gap-2">
+                        <p className="text-xs text-slate-500 font-mono truncate flex-1">{resendLink}</p>
+                        <button
+                          type="button"
+                          onClick={() => { navigator.clipboard.writeText(resendLink); setResendCopied(true); setTimeout(() => setResendCopied(false), 2000) }}
+                          className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+                          style={{ background: resendCopied ? '#F0FDF4' : '#EFF6FF', color: resendCopied ? '#16A34A' : '#2563EB' }}
+                        >
+                          {resendCopied ? '✓ Copied!' : 'Copy link'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Change password */}
