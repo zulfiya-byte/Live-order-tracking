@@ -337,6 +337,7 @@ export default function AdminPage() {
   const [logLoading, setLogLoading]   = useState(false)
   const [cacheInfo, setCacheInfo]     = useState(null)
   const [bustingCache, setBustingCache] = useState(false)
+  const [mobileShowDetail, setMobileShowDetail] = useState(false)
 
   const selected = clients.find(c => c.id === selectedId) || null
 
@@ -353,7 +354,9 @@ export default function AdminPage() {
   useEffect(() => {
     setEditingCompany(false)
     setCompanyDraft('')
-    if (!selectedId) { setContacts([]); return }
+    setResendLink('')
+    setResendCopied(false)
+    if (!selectedId) { setContacts([]); setMobileShowDetail(false); return }
     adminGetContacts(selectedId).then(d => setContacts(d?.contacts || []))
   }, [selectedId])
 
@@ -419,7 +422,7 @@ export default function AdminPage() {
   async function handleDeleteClient(id) {
     if (!confirm('Delete this client? This cannot be undone.')) return
     await adminDeleteClient(id)
-    if (selectedId === id) setSelectedId(null)
+    if (selectedId === id) { setSelectedId(null); setMobileShowDetail(false) }
     await fetchClients()
   }
 
@@ -540,9 +543,13 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden p-4 gap-4">
+      <div className="flex flex-1 overflow-hidden p-3 sm:p-4 gap-3 sm:gap-4">
         {/* Left: Client list */}
-        <div className="w-80 flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+        <div className={[
+          'bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden',
+          'flex-1 lg:flex-none lg:w-80 lg:flex-shrink-0',
+          mobileShowDetail ? 'hidden lg:flex' : 'flex',
+        ].join(' ')}>
           <div className="p-4 border-b border-slate-200">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-navy text-sm">
@@ -573,7 +580,7 @@ export default function AdminPage() {
             {filteredClients.map(c => (
               <button
                 key={c.id}
-                onClick={() => setSelectedId(c.id)}
+                onClick={() => { setSelectedId(c.id); setMobileShowDetail(true) }}
                 className={[
                   'w-full text-left px-4 py-3 flex items-center gap-3 transition hover:bg-gray-50',
                   selectedId === c.id ? 'bg-blue-50 border-l-2 border-brand' : 'border-l-2 border-transparent',
@@ -613,7 +620,7 @@ export default function AdminPage() {
 
         {/* Right: Detail panel */}
         {!selected ? (
-          <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center justify-center">
+          <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm hidden lg:flex items-center justify-center">
             <div className="text-center text-slate-400">
               <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -625,7 +632,22 @@ export default function AdminPage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden animate-fade-in">
+          <div className={[
+            'flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex-col overflow-hidden animate-fade-in',
+            mobileShowDetail ? 'flex' : 'hidden lg:flex',
+          ].join(' ')}>
+            {/* Mobile back button */}
+            <div className="lg:hidden flex items-center gap-2 px-4 pt-3 pb-0">
+              <button
+                onClick={() => setMobileShowDetail(false)}
+                className="flex items-center gap-1 text-sm font-semibold text-brand"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                All clients
+              </button>
+            </div>
             {/* Client header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-3">

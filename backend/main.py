@@ -219,8 +219,11 @@ def _build_filter_clause(params: dict, contact_emails: list = None) -> tuple:
         args.extend(contact_emails)
 
     if params.get("order_number"):
-        clauses.append("AND o.ID_Order = %s")
-        args.append(int(params["order_number"]))
+        try:
+            clauses.append("AND o.ID_Order = %s")
+            args.append(int(params["order_number"]))
+        except (ValueError, TypeError):
+            pass  # ignore non-numeric order number input
 
     if params.get("purchase_order"):
         clauses.append("AND o.CustomerPurchaseOrder LIKE %s")
@@ -676,6 +679,7 @@ def admin_add_contact(client_id: int, body: AddContactRequest, user: dict = Depe
                     (client_id, body.contact_email.strip()),
                 )
                 conn.commit()
+                cache_bust()
                 return {"id": cur.lastrowid}
             except Exception as e:
                 if "Duplicate entry" in str(e):
@@ -700,6 +704,7 @@ def admin_remove_contact(mapping_id: int, user: dict = Depends(require_admin)):
                     raise HTTPException(status_code=403, detail="Access denied")
             cur.execute("DELETE FROM local_reference.client_contacts WHERE id = %s", (mapping_id,))
             conn.commit()
+            cache_bust()
             return {"ok": True}
     finally:
         conn.close()
