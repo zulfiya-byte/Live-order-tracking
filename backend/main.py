@@ -354,7 +354,7 @@ def get_filters(company_override: str = None, user: dict = Depends(verify_token)
                     FROM shopworks.orders o
                     LEFT JOIN local_reference.order_type ot ON CAST(ot.id AS UNSIGNED) = o.id_OrderType
                     WHERE ot.name IS NOT NULL
-                    ORDER BY ot.name
+                    ORDER BY order_type
                     """
                 )
             else:
@@ -364,7 +364,7 @@ def get_filters(company_override: str = None, user: dict = Depends(verify_token)
                     FROM shopworks.orders o
                     LEFT JOIN local_reference.order_type ot ON CAST(ot.id AS UNSIGNED) = o.id_OrderType
                     WHERE o.CompanyName = %s AND ot.name IS NOT NULL
-                    ORDER BY ot.name
+                    ORDER BY order_type
                     """,
                     (company,),
                 )
