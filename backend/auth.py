@@ -12,12 +12,13 @@ JWT_TTL_H  = 8
 _bearer = HTTPBearer()
 
 
-def make_token(email: str, client_id: int, company_name: str, is_admin: bool, view_all_orders: bool = False) -> str:
+def make_token(email: str, client_id: int, company_name: str, is_admin: bool, view_all_orders: bool = False, is_super_admin: bool = False) -> str:
     payload = {
         "sub": email,
         "client_id": client_id,
         "company_name": company_name,
         "is_admin": is_admin,
+        "is_super_admin": is_super_admin,
         "view_all_orders": view_all_orders,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_TTL_H),
     }
@@ -36,6 +37,12 @@ def verify_token(creds: HTTPAuthorizationCredentials = Security(_bearer)) -> dic
 def require_admin(user: dict = Depends(verify_token)) -> dict:
     if not user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+def require_super_admin(user: dict = Depends(verify_token)) -> dict:
+    if not user.get("is_super_admin"):
+        raise HTTPException(status_code=403, detail="Super admin access required")
     return user
 
 

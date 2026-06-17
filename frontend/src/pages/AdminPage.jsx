@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
-  logout,
+  logout, isSuperAdmin,
   adminGetClients, adminCreateClient, adminUpdateClient, adminDeleteClient,
   adminGetContacts, adminAddContact, adminRemoveContact,
   adminSuggestContacts, adminGetCompanies, adminResendInvite,
@@ -309,6 +309,7 @@ function ContactTag({ contact, onRemove }) {
 
 export default function AdminPage() {
   const nav = useNavigate()
+  const superAdmin = isSuperAdmin()
   const [clients, setClients]           = useState([])
   const [selectedId, setSelectedId]     = useState(null)
   const [contacts, setContacts]         = useState([])
@@ -429,7 +430,7 @@ export default function AdminPage() {
             <img src="/pxp-logo.png" alt="PXP Solutions" className="h-9 object-contain" />
             <div className="border-l border-slate-200 pl-3">
               <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold leading-none mb-0.5">Admin Panel</p>
-              <p className="text-sm font-bold text-navy leading-none">Client Management</p>
+              <p className="text-sm font-bold text-navy leading-none">{superAdmin ? 'Client Management' : 'My Company Users'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -469,15 +470,17 @@ export default function AdminPage() {
               <h2 className="font-bold text-navy text-sm">
                 Clients <span className="text-slate-400 font-normal text-xs">({clients.length})</span>
               </h2>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                Add client
-              </button>
+              {superAdmin && (
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add client
+                </button>
+              )}
             </div>
             <input
               type="text"
@@ -553,25 +556,27 @@ export default function AdminPage() {
                   <p className="text-xs text-gray-500">{selected.company_name}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleToggleAdmin(selected)}
-                  className={[
-                    'text-xs px-3 py-1.5 rounded-lg font-semibold transition',
-                    selected.is_admin
-                      ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                  ].join(' ')}
-                >
-                  {selected.is_admin ? 'Admin: On' : 'Admin: Off'}
-                </button>
-                <button
-                  onClick={() => handleDeleteClient(selected.id)}
-                  className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg font-semibold transition"
-                >
-                  Delete
-                </button>
-              </div>
+              {superAdmin && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleToggleAdmin(selected)}
+                    className={[
+                      'text-xs px-3 py-1.5 rounded-lg font-semibold transition',
+                      selected.is_admin
+                        ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    ].join(' ')}
+                  >
+                    {selected.is_admin ? 'Admin: On' : 'Admin: Off'}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClient(selected.id)}
+                    className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg font-semibold transition"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">

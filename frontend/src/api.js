@@ -22,6 +22,7 @@ export async function login(email, password) {
   localStorage.setItem('pxp_token', data.token)
   localStorage.setItem('pxp_company', data.company_name)
   localStorage.setItem('pxp_is_admin', data.is_admin ? '1' : '')
+  localStorage.setItem('pxp_is_super_admin', data.is_super_admin ? '1' : '')
   return data
 }
 
@@ -29,6 +30,7 @@ export function logout() {
   localStorage.removeItem('pxp_token')
   localStorage.removeItem('pxp_company')
   localStorage.removeItem('pxp_is_admin')
+  localStorage.removeItem('pxp_is_super_admin')
 }
 
 export function isLoggedIn() {
@@ -37,6 +39,10 @@ export function isLoggedIn() {
 
 export function isAdmin() {
   return localStorage.getItem('pxp_is_admin') === '1'
+}
+
+export function isSuperAdmin() {
+  return localStorage.getItem('pxp_is_super_admin') === '1'
 }
 
 async function apiFetch(path, opts = {}) {

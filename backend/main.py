@@ -11,7 +11,7 @@ from typing import Optional
 from dotenv import load_dotenv
 
 from db import get_conn
-from auth import verify_token, require_admin, check_password, make_token, hash_password
+from auth import verify_token, require_admin, require_super_admin, check_password, make_token, hash_password
 from email_utils import send_invite_email
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -36,6 +36,7 @@ def ensure_invite_schema():
                 "ALTER TABLE local_reference.clients MODIFY COLUMN password_hash VARCHAR(255) NULL",
                 "ALTER TABLE local_reference.clients ADD COLUMN invite_token VARCHAR(100) NULL",
                 "ALTER TABLE local_reference.clients ADD COLUMN invite_expires_at DATETIME NULL",
+                "ALTER TABLE local_reference.clients ADD COLUMN is_super_admin TINYINT(1) NOT NULL DEFAULT 0",
             ]:
                 try:
                     cur.execute(sql)
@@ -63,7 +64,7 @@ def login(body: LoginRequest):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, email, password_hash, company_name, is_admin FROM local_reference.clients WHERE email = %s",
+                "SELECT id, email, password_hash, company_name, is_admin, is_super_admin FROM local_reference.clients WHERE email = %s",
                 (body.email,),
             )
             row = cur.fetchone()
@@ -77,8 +78,9 @@ def login(body: LoginRequest):
     if not check_password(body.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = make_token(row["email"], row["id"], row["company_name"], bool(row["is_admin"]))
-    return {"token": token, "company_name": row["company_name"], "is_admin": bool(row["is_admin"])}
+    is_super = bool(row.get("is_super_admin"))
+    token = make_token(row["email"], row["id"], row["company_name"], bool(row["is_admin"]), is_super_admin=is_super)
+    return {"token": token, "company_name": row["company_name"], "is_admin": bool(row["is_admin"]), "is_super_admin": is_super}
 
 
 # ── Orders ────────────────────────────────────────────────────────────────────
@@ -286,24 +288,32 @@ class AddContactRequest(BaseModel):
     contact_email: str
 
 
+_CLIENTS_SELECT = """
+    SELECT c.id, c.email, c.company_name, c.is_admin,
+           COUNT(cc.id) AS contact_count,
+           CASE
+             WHEN c.password_hash IS NOT NULL THEN 'active'
+             WHEN c.invite_token IS NOT NULL AND c.invite_expires_at > NOW() THEN 'pending'
+             ELSE 'expired'
+           END AS invite_status
+    FROM local_reference.clients c
+    LEFT JOIN local_reference.client_contacts cc ON cc.client_id = c.id
+"""
+_CLIENTS_GROUP = """
+    GROUP BY c.id, c.email, c.company_name, c.is_admin, c.password_hash, c.invite_token, c.invite_expires_at
+    ORDER BY c.company_name, c.email
+"""
+
+
 @app.get("/api/admin/clients")
 def admin_list_clients(user: dict = Depends(require_admin)):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT c.id, c.email, c.company_name, c.is_admin,
-                       COUNT(cc.id) AS contact_count,
-                       CASE
-                         WHEN c.password_hash IS NOT NULL THEN 'active'
-                         WHEN c.invite_token IS NOT NULL AND c.invite_expires_at > NOW() THEN 'pending'
-                         ELSE 'expired'
-                       END AS invite_status
-                FROM local_reference.clients c
-                LEFT JOIN local_reference.client_contacts cc ON cc.client_id = c.id
-                GROUP BY c.id, c.email, c.company_name, c.is_admin, c.password_hash, c.invite_token, c.invite_expires_at
-                ORDER BY c.company_name, c.email
-            """)
+            if user.get("is_super_admin"):
+                cur.execute(_CLIENTS_SELECT + _CLIENTS_GROUP)
+            else:
+                cur.execute(_CLIENTS_SELECT + "WHERE c.company_name = %s" + _CLIENTS_GROUP, (user["company_name"],))
             clients = cur.fetchall()
             for c in clients:
                 c["is_admin"] = bool(c["is_admin"])
@@ -313,7 +323,7 @@ def admin_list_clients(user: dict = Depends(require_admin)):
 
 
 @app.post("/api/admin/clients", status_code=201)
-def admin_create_client(body: CreateClientRequest, user: dict = Depends(require_admin)):
+def admin_create_client(body: CreateClientRequest, user: dict = Depends(require_super_admin)):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -369,6 +379,8 @@ def admin_resend_invite(client_id: int, user: dict = Depends(require_admin)):
             row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Client not found")
+        if not user.get("is_super_admin") and row["company_name"] != user["company_name"]:
+            raise HTTPException(status_code=403, detail="Access denied")
         if row["password_hash"]:
             raise HTTPException(status_code=400, detail="Client has already set their password")
         with conn.cursor() as cur:
@@ -452,17 +464,39 @@ def set_password(body: SetPasswordRequest):
 
 @app.put("/api/admin/clients/{client_id}")
 def admin_update_client(client_id: int, body: UpdateClientRequest, user: dict = Depends(require_admin)):
+    is_super = user.get("is_super_admin")
     fields, args = [], []
+
     if body.email is not None:
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Only PXP admins can change email")
         fields.append("email = %s"); args.append(body.email)
     if body.password is not None:
         fields.append("password_hash = %s"); args.append(hash_password(body.password))
     if body.company_name is not None:
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Only PXP admins can change company")
         fields.append("company_name = %s"); args.append(body.company_name)
     if body.is_admin is not None:
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Only PXP admins can change admin status")
         fields.append("is_admin = %s"); args.append(int(body.is_admin))
+
     if not fields:
         raise HTTPException(status_code=400, detail="Nothing to update")
+
+    # Company admins may only update clients within their own company
+    if not is_super:
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT company_name FROM local_reference.clients WHERE id = %s", (client_id,))
+                row = cur.fetchone()
+        finally:
+            conn.close()
+        if not row or row["company_name"] != user["company_name"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+
     args.append(client_id)
     conn = get_conn()
     try:
@@ -475,7 +509,7 @@ def admin_update_client(client_id: int, body: UpdateClientRequest, user: dict = 
 
 
 @app.delete("/api/admin/clients/{client_id}")
-def admin_delete_client(client_id: int, user: dict = Depends(require_admin)):
+def admin_delete_client(client_id: int, user: dict = Depends(require_super_admin)):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -486,8 +520,24 @@ def admin_delete_client(client_id: int, user: dict = Depends(require_admin)):
         conn.close()
 
 
+def _assert_client_company(client_id: int, user: dict):
+    """For non-super-admins: verify the target client is in the same company."""
+    if user.get("is_super_admin"):
+        return
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT company_name FROM local_reference.clients WHERE id = %s", (client_id,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row or row["company_name"] != user["company_name"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 @app.get("/api/admin/clients/{client_id}/contacts")
 def admin_list_contacts(client_id: int, user: dict = Depends(require_admin)):
+    _assert_client_company(client_id, user)
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -506,6 +556,7 @@ def admin_list_contacts(client_id: int, user: dict = Depends(require_admin)):
 
 @app.post("/api/admin/clients/{client_id}/contacts", status_code=201)
 def admin_add_contact(client_id: int, body: AddContactRequest, user: dict = Depends(require_admin)):
+    _assert_client_company(client_id, user)
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -529,6 +580,14 @@ def admin_remove_contact(mapping_id: int, user: dict = Depends(require_admin)):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
+            if not user.get("is_super_admin"):
+                cur.execute("""
+                    SELECT cc.id FROM local_reference.client_contacts cc
+                    JOIN local_reference.clients c ON c.id = cc.client_id
+                    WHERE cc.id = %s AND c.company_name = %s
+                """, (mapping_id, user["company_name"]))
+                if not cur.fetchone():
+                    raise HTTPException(status_code=403, detail="Access denied")
             cur.execute("DELETE FROM local_reference.client_contacts WHERE id = %s", (mapping_id,))
             conn.commit()
             return {"ok": True}
