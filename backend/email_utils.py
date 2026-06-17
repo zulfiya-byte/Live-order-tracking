@@ -1,38 +1,73 @@
 import os
 import json
 import urllib.request
+import urllib.parse
 import urllib.error
 
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
-SMTP_FROM        = os.getenv("SMTP_FROM", "no-reply@pxpsolutions.com")
-PORTAL_URL       = os.getenv("PORTAL_URL", "http://localhost:5173")
+GRAPH_TENANT_ID     = os.getenv("GRAPH_TENANT_ID", "")
+GRAPH_CLIENT_ID     = os.getenv("GRAPH_CLIENT_ID", "")
+GRAPH_CLIENT_SECRET = os.getenv("GRAPH_CLIENT_SECRET", "")
+SMTP_FROM           = os.getenv("SMTP_FROM", "no-reply@pxpsolutions.com")
+PORTAL_URL          = os.getenv("PORTAL_URL", "http://localhost:5173")
 
 
-def _send(to_email: str, subject: str, html: str):
-    if not SENDGRID_API_KEY:
-        raise RuntimeError("SENDGRID_API_KEY is not configured.")
+def _get_graph_token() -> str:
+    if not (GRAPH_TENANT_ID and GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET):
+        raise RuntimeError("Microsoft Graph credentials are not configured.")
 
-    payload = json.dumps({
-        "personalizations": [{"to": [{"email": to_email}]}],
-        "from": {"email": SMTP_FROM, "name": "PXP Solutions"},
-        "subject": subject,
-        "content": [{"type": "text/html", "value": html}],
+    data = urllib.parse.urlencode({
+        "grant_type":    "client_credentials",
+        "client_id":     GRAPH_CLIENT_ID,
+        "client_secret": GRAPH_CLIENT_SECRET,
+        "scope":         "https://graph.microsoft.com/.default",
     }).encode()
 
     req = urllib.request.Request(
-        "https://api.sendgrid.com/v3/mail/send",
+        f"https://login.microsoftonline.com/{GRAPH_TENANT_ID}/oauth2/v2.0/token",
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        raise RuntimeError(f"Graph token error {e.code}: {body}")
+
+    if "access_token" not in result:
+        raise RuntimeError(f"Graph token failed: {result.get('error_description', result)}")
+
+    return result["access_token"]
+
+
+def _send(to_email: str, subject: str, html: str):
+    token = _get_graph_token()
+
+    payload = json.dumps({
+        "message": {
+            "subject": subject,
+            "body": {"contentType": "HTML", "content": html},
+            "toRecipients": [{"emailAddress": {"address": to_email}}],
+            "from": {"emailAddress": {"address": SMTP_FROM}},
+        },
+        "saveToSentItems": False,
+    }).encode()
+
+    req = urllib.request.Request(
+        f"https://graph.microsoft.com/v1.0/users/{SMTP_FROM}/sendMail",
         data=payload,
         headers={
-            "Authorization": f"Bearer {SENDGRID_API_KEY}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         },
         method="POST",
     )
     try:
-        urllib.request.urlopen(req, timeout=10)
+        urllib.request.urlopen(req, timeout=15)
     except urllib.error.HTTPError as e:
         body = e.read().decode()
-        raise RuntimeError(f"SendGrid error {e.code}: {body}")
+        raise RuntimeError(f"Graph sendMail error {e.code}: {body}")
 
 
 def send_invite_email(to_email: str, company_name: str, token: str):
@@ -83,7 +118,7 @@ def send_invite_email(to_email: str, company_name: str, token: str):
         <tr>
           <td style="background:#F8FAFC;border-radius:0 0 16px 16px;padding:20px 40px;border-top:1px solid #E2E8F0;">
             <p style="margin:0;color:#94A3B8;font-size:11px;text-align:center;">
-              &copy; 2026 PXP Solutions &mdash; Sent to {to_email}.<br>
+              &copy; 2026 PXP Solutions. Sent to {to_email}.<br>
               If you didn't expect this, you can safely ignore it.
             </p>
           </td>
@@ -141,7 +176,7 @@ def send_reset_email(to_email: str, company_name: str, token: str):
         <tr>
           <td style="background:#F8FAFC;border-radius:0 0 16px 16px;padding:20px 40px;border-top:1px solid #E2E8F0;">
             <p style="margin:0;color:#94A3B8;font-size:11px;text-align:center;">
-              &copy; 2026 PXP Solutions &mdash; Sent to {to_email}.
+              &copy; 2026 PXP Solutions. Sent to {to_email}.
             </p>
           </td>
         </tr>
