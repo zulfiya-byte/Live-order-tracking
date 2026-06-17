@@ -220,8 +220,9 @@ def _build_filter_clause(params: dict, contact_emails: list = None) -> tuple:
 
     if params.get("order_number"):
         try:
+            order_num = int(params["order_number"])
             clauses.append("AND o.ID_Order = %s")
-            args.append(int(params["order_number"]))
+            args.append(order_num)
         except (ValueError, TypeError):
             pass  # ignore non-numeric order number input
 
