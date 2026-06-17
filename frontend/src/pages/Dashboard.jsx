@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { getOrders, getFilters, logout, isAdmin } from '../api'
+import { getOrders, getFilters, logout, isAdmin, isSuperAdmin, adminGetCompanies } from '../api'
 import Sidebar from '../components/Sidebar'
 import OrderTable, { COLS } from '../components/OrderTable'
 import StatsBar from '../components/StatsBar'
@@ -45,8 +45,17 @@ function exportCSV(orders, tabLabel, company) {
 
 export default function Dashboard() {
   const nav = useNavigate()
-  const company = localStorage.getItem('pxp_company') || ''
-  const admin = isAdmin()
+  const ownCompany = localStorage.getItem('pxp_company') || ''
+  const admin      = isAdmin()
+  const superAdmin = isSuperAdmin()
+
+  const [viewingCompany, setViewingCompany] = useState(ownCompany)
+  const [companySearch, setCompanySearch]   = useState('')
+  const [companySuggestions, setCompanySuggestions] = useState([])
+  const [showCompanyDrop, setShowCompanyDrop] = useState(false)
+  const companyInputRef = useRef(null)
+
+  const company = viewingCompany || ownCompany
 
   const [allOrders, setAllOrders]   = useState([])
   const [orderTypes, setOrderTypes] = useState([])
@@ -56,18 +65,20 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
-  const fetchOrders = useCallback(async (filters) => {
+  const override = superAdmin && viewingCompany !== ownCompany ? viewingCompany : ''
+
+  const fetchOrders = useCallback(async (filters, co) => {
     setLoading(true)
     setError('')
     try {
-      const data = await getOrders(filters)
+      const data = await getOrders(filters, co ?? override)
       if (data) setAllOrders(data.orders)
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [override])
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -76,9 +87,26 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    getFilters().then(d => setOrderTypes(d?.order_types || []))
+    getFilters(override).then(d => setOrderTypes(d?.order_types || []))
     fetchOrders({})
-  }, [fetchOrders])
+  }, [fetchOrders, override])
+
+  // Company autocomplete for super admins
+  useEffect(() => {
+    if (!superAdmin || !companySearch) { setCompanySuggestions([]); return }
+    const t = setTimeout(() => {
+      adminGetCompanies(companySearch).then(d => setCompanySuggestions(d?.companies || []))
+    }, 200)
+    return () => clearTimeout(t)
+  }, [companySearch, superAdmin])
+
+  function selectCompany(c) {
+    setViewingCompany(c)
+    setCompanySearch('')
+    setCompanySuggestions([])
+    setShowCompanyDrop(false)
+    setActiveTab('all')
+  }
 
   const displayedOrders = useMemo(() => {
     if (activeTab === 'active')  return allOrders.filter(o => !o.shipped)
@@ -115,7 +143,35 @@ export default function Dashboard() {
             <img src="/pxp-logo.png" alt="PXP Solutions" className="h-9 object-contain animate-pop-in" />
             <div className="hidden sm:block border-l border-slate-200 pl-3">
               <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold leading-none mb-0.5">Order Portal</p>
-              <p className="text-sm font-bold text-navy leading-none">{company}</p>
+              {superAdmin ? (
+                <div className="relative">
+                  <input
+                    ref={companyInputRef}
+                    value={companySearch || company}
+                    onChange={e => { setCompanySearch(e.target.value); setShowCompanyDrop(true) }}
+                    onFocus={() => { setCompanySearch(''); setShowCompanyDrop(true) }}
+                    onBlur={() => setTimeout(() => { setShowCompanyDrop(false); setCompanySearch('') }, 150)}
+                    className="text-sm font-bold text-navy leading-none bg-transparent border-b border-dashed border-brand/50 focus:outline-none focus:border-brand w-48 pr-4"
+                    placeholder="Search company…"
+                  />
+                  <svg className="absolute right-0 top-0.5 w-3 h-3 text-brand pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  {showCompanyDrop && companySuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 w-64 max-h-56 overflow-y-auto">
+                      {companySuggestions.map(c => (
+                        <button key={c} type="button"
+                          onMouseDown={() => selectCompany(c)}
+                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 text-slate-700 hover:text-navy transition first:rounded-t-xl last:rounded-b-xl">
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm font-bold text-navy leading-none">{company}</p>
+              )}
             </div>
           </div>
 
@@ -123,6 +179,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             {/* Mobile: company name */}
             <p className="sm:hidden text-sm font-bold text-navy mr-1">{company}</p>
+
 
             {/* Refresh */}
             <button
@@ -198,7 +255,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold text-navy">
                 {greeting()},{' '}
-                <span style={{ color: '#0369A1' }}>{company || 'there'}</span>
+                <span style={{ color: '#0369A1' }}>{superAdmin ? 'PXP Admin' : (company || 'there')}</span>
                 <span className="text-slate-400 font-normal text-xs ml-2 hidden sm:inline">
                   {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </span>

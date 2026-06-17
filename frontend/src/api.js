@@ -55,14 +55,16 @@ async function apiFetch(path, opts = {}) {
   return res.json()
 }
 
-export async function getOrders(filters = {}) {
+export async function getOrders(filters = {}, companyOverride = '') {
   const params = new URLSearchParams()
   Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
+  if (companyOverride) params.set('company_override', companyOverride)
   return apiFetch(`/api/orders?${params}`)
 }
 
-export async function getFilters() {
-  return apiFetch('/api/filters')
+export async function getFilters(companyOverride = '') {
+  const params = companyOverride ? `?company_override=${encodeURIComponent(companyOverride)}` : ''
+  return apiFetch(`/api/filters${params}`)
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

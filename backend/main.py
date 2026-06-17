@@ -205,19 +205,25 @@ def get_orders(
     ship_date_from: str = None,
     ship_date_to: str = None,
     shipped: str = None,
+    company_override: str = None,
     user: dict = Depends(verify_token),
 ):
-    company = user["company_name"]
+    is_super = user.get("is_super_admin")
+    company = (company_override if is_super and company_override else None) or user["company_name"]
     client_id = user["client_id"]
 
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT contact_name FROM local_reference.client_contacts WHERE client_id = %s",
-                (client_id,),
-            )
-            contact_emails = [r["contact_name"] for r in cur.fetchall()]
+            # Super admins see all orders for the company; regular users scoped to their contacts
+            if is_super:
+                contact_emails = []
+            else:
+                cur.execute(
+                    "SELECT contact_name FROM local_reference.client_contacts WHERE client_id = %s",
+                    (client_id,),
+                )
+                contact_emails = [r["contact_name"] for r in cur.fetchall()]
 
             extra_sql, extra_args = _build_filter_clause({
                 "order_number": order_number,
@@ -242,8 +248,8 @@ def get_orders(
 # ── Filters ───────────────────────────────────────────────────────────────────
 
 @app.get("/api/filters")
-def get_filters(user: dict = Depends(verify_token)):
-    company = user["company_name"]
+def get_filters(company_override: str = None, user: dict = Depends(verify_token)):
+    company = (company_override if user.get("is_super_admin") and company_override else None) or user["company_name"]
     conn = get_conn()
     try:
         with conn.cursor() as cur:

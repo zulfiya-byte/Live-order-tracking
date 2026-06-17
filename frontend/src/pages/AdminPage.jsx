@@ -326,6 +326,10 @@ export default function AdminPage() {
   const [search, setSearch]             = useState('')
   const [saving, setSaving]             = useState(false)
   const [resending, setResending]       = useState(false)
+  const [editingCompany, setEditingCompany] = useState(false)
+  const [companyDraft, setCompanyDraft]     = useState('')
+  const [companySuggestionsEdit, setCompanySuggestionsEdit] = useState([])
+  const [showCompanyEditDrop, setShowCompanyEditDrop]       = useState(false)
   const inputRef = useRef(null)
 
   const selected = clients.find(c => c.id === selectedId) || null
@@ -341,6 +345,8 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => {
+    setEditingCompany(false)
+    setCompanyDraft('')
     if (!selectedId) { setContacts([]); return }
     adminGetContacts(selectedId).then(d => setContacts(d?.contacts || []))
   }, [selectedId])
@@ -377,6 +383,26 @@ export default function AdminPage() {
   async function handleToggleAdmin(client) {
     await adminUpdateClient(client.id, { is_admin: !client.is_admin })
     await fetchClients()
+  }
+
+  useEffect(() => {
+    if (!editingCompany || !companyDraft) { setCompanySuggestionsEdit([]); return }
+    const t = setTimeout(() => {
+      adminGetCompanies(companyDraft).then(d => setCompanySuggestionsEdit(d?.companies || []))
+    }, 200)
+    return () => clearTimeout(t)
+  }, [companyDraft, editingCompany])
+
+  async function handleSaveCompany() {
+    if (!companyDraft.trim() || companyDraft === selected?.company_name) { setEditingCompany(false); return }
+    try {
+      await adminUpdateClient(selectedId, { company_name: companyDraft.trim() })
+      setEditingCompany(false)
+      setCompanyDraft('')
+      await fetchClients()
+    } catch (e) {
+      alert(e.message)
+    }
   }
 
   async function handleToggleSuperAdmin(client) {
@@ -561,7 +587,50 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <p className="font-bold text-navy text-sm">{selected.email}</p>
-                  <p className="text-xs text-gray-500">{selected.company_name}</p>
+                  {editingCompany ? (
+                    <div className="relative flex items-center gap-1 mt-0.5">
+                      <div className="relative">
+                        <input
+                          autoFocus
+                          value={companyDraft}
+                          onChange={e => { setCompanyDraft(e.target.value); setShowCompanyEditDrop(true) }}
+                          onFocus={() => setShowCompanyEditDrop(true)}
+                          onBlur={() => setTimeout(() => setShowCompanyEditDrop(false), 150)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSaveCompany(); if (e.key === 'Escape') { setEditingCompany(false); setCompanyDraft('') } }}
+                          className="text-xs border border-brand rounded px-2 py-0.5 focus:outline-none w-44"
+                          placeholder="Type to search…"
+                        />
+                        {showCompanyEditDrop && companySuggestionsEdit.length > 0 && (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 w-64 max-h-48 overflow-y-auto">
+                            {companySuggestionsEdit.map(c => (
+                              <button key={c} type="button"
+                                onMouseDown={() => { setCompanyDraft(c); setShowCompanyEditDrop(false) }}
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 text-slate-700 hover:text-navy transition first:rounded-t-xl last:rounded-b-xl">
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={handleSaveCompany} className="text-[10px] font-bold px-2 py-0.5 rounded bg-brand text-white">Save</button>
+                      <button onClick={() => { setEditingCompany(false); setCompanyDraft('') }} className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">✕</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <p className="text-xs text-gray-500">{selected.company_name}</p>
+                      {superAdmin && (
+                        <button
+                          onClick={() => { setEditingCompany(true); setCompanyDraft(selected.company_name) }}
+                          className="w-3.5 h-3.5 text-slate-400 hover:text-brand transition flex-shrink-0"
+                          title="Change company"
+                        >
+                          <svg fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               {superAdmin && (
