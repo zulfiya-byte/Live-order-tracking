@@ -187,3 +187,20 @@ def send_reset_email(to_email: str, company_name: str, token: str):
 </html>"""
 
     _send(to_email, "Reset your PXP Solutions portal password", html)
+
+
+def send_error_alert(method: str, path: str, traceback_text: str):
+    alert_email = os.getenv("ALERT_EMAIL", SMTP_FROM)
+    short_tb = traceback_text[:3000]
+    html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:24px;background:#FEF2F2;font-family:monospace;">
+  <div style="background:#fff;border:1px solid #FECACA;border-radius:8px;padding:20px;max-width:700px;">
+    <p style="color:#991B1B;font-weight:700;font-size:14px;margin:0 0 12px;">PXP Portal &mdash; Unhandled Error</p>
+    <p style="color:#374151;font-size:13px;margin:0 0 8px;"><strong>Route:</strong> {method} {path}</p>
+    <pre style="background:#FEF2F2;padding:12px;border-radius:6px;font-size:11px;white-space:pre-wrap;overflow-x:auto;color:#1F2937;">{short_tb}</pre>
+  </div>
+</body>
+</html>"""
+    _send(alert_email, f"[PXP Portal Error] {method} {path}", html)

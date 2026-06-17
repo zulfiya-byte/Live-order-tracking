@@ -1,22 +1,48 @@
 import os
+import time
 import secrets
+import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from db import get_conn
 from auth import verify_token, require_admin, require_super_admin, check_password, make_token, hash_password
-from email_utils import send_invite_email
+from email_utils import send_invite_email, send_reset_email, send_error_alert
+from cache import cache_get, cache_set, cache_bust, cache_info
 
 load_dotenv(Path(__file__).parent / ".env")
 
+# ── Logging ───────────────────────────────────────────────────────────────────
+
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "app.log"
+
+_log_handler = RotatingFileHandler(str(LOG_FILE), maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+
+log = logging.getLogger("pxp")
+log.setLevel(logging.INFO)
+log.addHandler(_log_handler)
+
+# ── Rate limiter ──────────────────────────────────────────────────────────────
+
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="PXP Order Dashboard API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +50,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_alert_cooldown: dict = {}
+_ALERT_COOLDOWN_S = 3600  # max 1 alert email per error type per hour
+
+
+@app.middleware("http")
+async def log_and_alert(request: Request, call_next):
+    start = time.time()
+    try:
+        response = await call_next(request)
+        ms = round((time.time() - start) * 1000)
+        level = logging.WARNING if response.status_code >= 400 else logging.INFO
+        log.log(level, f"{request.method} {request.url.path} {response.status_code} ({ms}ms)")
+        return response
+    except Exception as exc:
+        import traceback as _tb
+        tb_str = _tb.format_exc()
+        log.error(f"UNHANDLED {request.method} {request.url.path}\n{tb_str}")
+        key = f"{type(exc).__name__}:{request.url.path}"
+        now = time.time()
+        if now - _alert_cooldown.get(key, 0) > _ALERT_COOLDOWN_S:
+            _alert_cooldown[key] = now
+            try:
+                send_error_alert(request.method, str(request.url.path), tb_str)
+            except Exception:
+                pass
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.on_event("startup")
@@ -43,6 +96,15 @@ def ensure_invite_schema():
                 except Exception:
                     pass  # column already exists — safe to ignore
             conn.commit()
+            # Clean up expired invite tokens
+            try:
+                cur.execute(
+                    "UPDATE local_reference.clients SET invite_token = NULL, invite_expires_at = NULL "
+                    "WHERE invite_expires_at IS NOT NULL AND invite_expires_at < NOW() AND password_hash IS NULL"
+                )
+                conn.commit()
+            except Exception:
+                pass
     except Exception:
         pass  # don't crash startup if DB is temporarily unavailable
     finally:
@@ -59,7 +121,8 @@ class LoginRequest(BaseModel):
 
 
 @app.post("/api/auth/login")
-def login(body: LoginRequest):
+@limiter.limit("10/minute")
+def login(request: Request, body: LoginRequest):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -72,14 +135,17 @@ def login(body: LoginRequest):
         conn.close()
 
     if not row:
+        log.warning(f"Failed login attempt for {body.email}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not row["password_hash"]:
         raise HTTPException(status_code=401, detail="Please check your email to activate your account first.")
     if not check_password(body.password, row["password_hash"]):
+        log.warning(f"Failed login attempt for {body.email}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     is_super = bool(row.get("is_super_admin"))
     token = make_token(row["email"], row["id"], row["company_name"], bool(row["is_admin"]), is_super_admin=is_super)
+    log.info(f"Login: {row['email']} ({row['company_name']})")
     return {"token": token, "company_name": row["company_name"], "is_admin": bool(row["is_admin"]), "is_super_admin": is_super}
 
 
@@ -217,10 +283,13 @@ def get_orders(
     company = (company_override if is_super and company_override else None) or user["company_name"]
     client_id = user["client_id"]
 
+    year = datetime.now().year
+    cache_key = f"orders:{'ALL' if view_all else company}:{year}"
+    no_filters = not any([order_number, purchase_order, order_contact, design_name, order_type, ship_date_from, ship_date_to, shipped])
+
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            # Super admins are never contact-scoped
             if is_super:
                 contact_emails = []
             else:
@@ -241,6 +310,13 @@ def get_orders(
                 "shipped": shipped,
             }, contact_emails)
 
+            # Use cache only for unfiltered requests
+            if no_filters:
+                cached = cache_get(cache_key)
+                if cached is not None:
+                    log.info(f"Cache hit: {cache_key}")
+                    return {"orders": cached, "count": len(cached), "cached": True}
+
             if view_all:
                 sql = _ORDERS_SQL_ALL + extra_sql + _ORDERS_GROUP_BY + " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 3000"
                 cur.execute(sql, extra_args)
@@ -251,7 +327,11 @@ def get_orders(
     finally:
         conn.close()
 
-    return {"orders": _serialize_rows(rows), "count": len(rows)}
+    rows = _serialize_rows(rows)
+    if no_filters:
+        cache_set(cache_key, rows)
+        log.info(f"Cache set: {cache_key} ({len(rows)} rows)")
+    return {"orders": rows, "count": len(rows), "cached": False}
 
 
 # ── Filters ───────────────────────────────────────────────────────────────────
@@ -353,7 +433,7 @@ def admin_list_clients(user: dict = Depends(require_admin)):
 
 
 @app.post("/api/admin/clients", status_code=201)
-def admin_create_client(body: CreateClientRequest, user: dict = Depends(require_super_admin)):
+def admin_create_client(body: CreateClientRequest, background_tasks: BackgroundTasks, user: dict = Depends(require_super_admin)):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -385,18 +465,15 @@ def admin_create_client(body: CreateClientRequest, user: dict = Depends(require_
 
         portal_url = os.getenv("PORTAL_URL", "http://localhost:5173")
         invite_url = f"{portal_url}/set-password?token={token}"
-        try:
-            send_invite_email(body.email, body.company_name, token)
-        except Exception as e:
-            return {"id": new_id, "invited": False, "invite_url": invite_url, "email_error": str(e)}
-
+        background_tasks.add_task(send_invite_email, body.email, body.company_name, token)
+        log.info(f"Client created: {body.email} ({body.company_name}) by {user['sub']}")
         return {"id": new_id, "invited": True, "invite_url": invite_url}
     finally:
         conn.close()
 
 
 @app.post("/api/admin/clients/{client_id}/resend-invite", status_code=200)
-def admin_resend_invite(client_id: int, user: dict = Depends(require_admin)):
+def admin_resend_invite(client_id: int, background_tasks: BackgroundTasks, user: dict = Depends(require_admin)):
     token   = secrets.token_urlsafe(48)
     expires = datetime.utcnow() + timedelta(hours=72)
     conn = get_conn()
@@ -424,11 +501,7 @@ def admin_resend_invite(client_id: int, user: dict = Depends(require_admin)):
 
     portal_url = os.getenv("PORTAL_URL", "http://localhost:5173")
     invite_url = f"{portal_url}/set-password?token={token}"
-    try:
-        send_invite_email(row["email"], row["company_name"], token)
-    except Exception as e:
-        return {"ok": True, "invite_url": invite_url, "email_error": str(e)}
-
+    background_tasks.add_task(send_invite_email, row["email"], row["company_name"], token)
     return {"ok": True, "invite_url": invite_url}
 
 
@@ -678,6 +751,62 @@ def list_companies(q: str = "", user: dict = Depends(require_admin)):
 @app.get("/api/health")
 def health():
     return {"ok": True}
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+@app.post("/api/auth/forgot-password")
+@limiter.limit("5/minute")
+def forgot_password(request: Request, body: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    token = secrets.token_urlsafe(48)
+    expires = datetime.utcnow() + timedelta(hours=72)
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, company_name, password_hash FROM local_reference.clients WHERE email = %s",
+                (body.email,),
+            )
+            row = cur.fetchone()
+        if row and row["password_hash"]:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE local_reference.clients SET invite_token = %s, invite_expires_at = %s WHERE email = %s",
+                    (token, expires, body.email),
+                )
+                conn.commit()
+            background_tasks.add_task(send_reset_email, body.email, row["company_name"], token)
+            log.info(f"Password reset requested for {body.email}")
+    finally:
+        conn.close()
+    # Always return ok — never reveal if email exists
+    return {"ok": True}
+
+
+# ── Admin: cache + logs ───────────────────────────────────────────────────────
+
+@app.get("/api/admin/cache")
+def admin_cache_info(user: dict = Depends(require_super_admin)):
+    return {"cache": cache_info()}
+
+
+@app.post("/api/admin/cache/bust")
+def admin_cache_bust(user: dict = Depends(require_super_admin)):
+    cache_bust()
+    log.info(f"Cache busted by {user['sub']}")
+    return {"ok": True}
+
+
+@app.get("/api/admin/logs")
+def admin_get_logs(lines: int = 300, user: dict = Depends(require_super_admin)):
+    try:
+        with open(LOG_FILE, encoding="utf-8") as f:
+            all_lines = f.readlines()
+        return {"lines": [l.rstrip() for l in all_lines[-lines:]], "total": len(all_lines)}
+    except FileNotFoundError:
+        return {"lines": [], "total": 0}
 
 
 # ── Serve built React frontend (production) ───────────────────────────────────

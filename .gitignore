@@ -7,3 +7,4 @@ frontend/dist/
 *.pyc
 .DS_Store
 "PXP Logo-02 (1).png"
+backend/logs/

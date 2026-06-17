@@ -3,6 +3,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AdminPage from './pages/AdminPage'
 import SetPassword from './pages/SetPassword'
+import ForgotPassword from './pages/ForgotPassword'
 import { isLoggedIn, isAdmin } from './api'
 
 function Protected({ children }) {
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/admin" element={<AdminOnly><AdminPage /></AdminOnly>} />
         <Route path="/set-password" element={<SetPassword />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<Navigate to={isLoggedIn() ? '/dashboard' : '/login'} replace />} />
       </Routes>
     </BrowserRouter>

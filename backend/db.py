@@ -1,4 +1,5 @@
 import os
+import queue
 import pymysql
 import pymysql.cursors
 from dotenv import load_dotenv
@@ -15,6 +16,38 @@ _cfg = dict(
     autocommit=True,
 )
 
-def get_conn():
-    """Return a new PyMySQL connection. Caller must close it."""
+_POOL_SIZE = 5
+_pool: queue.Queue = queue.Queue(maxsize=_POOL_SIZE)
+
+
+class PooledConn:
+    """Wraps a PyMySQL connection so .close() returns it to the pool."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def close(self):
+        try:
+            _pool.put_nowait(self._conn)
+        except queue.Full:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+
+
+def _new_conn():
     return pymysql.connect(**_cfg)
+
+
+def get_conn() -> PooledConn:
+    """Return a pooled connection. Caller must call .close() when done."""
+    try:
+        conn = _pool.get_nowait()
+        conn.ping(reconnect=True)
+        return PooledConn(conn)
+    except (queue.Empty, Exception):
+        return PooledConn(_new_conn())

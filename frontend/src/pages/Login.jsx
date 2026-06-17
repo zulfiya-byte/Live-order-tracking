@@ -172,6 +172,9 @@ export default function Login() {
                   : 'Sign In'}
               </button>
             </form>
+            <p className="text-center text-xs text-slate-400 mt-4">
+              <a href="/forgot-password" className="text-brand hover:underline font-medium">Forgot your password?</a>
+            </p>
           </div>
 
           <p className="text-center text-xs text-slate-400 mt-5">

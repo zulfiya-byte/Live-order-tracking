@@ -129,3 +129,22 @@ export async function setPassword(token, password) {
     body: JSON.stringify({ token, password }),
   })
 }
+
+export async function forgotPassword(email) {
+  return apiFetch('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
+}
+
+export async function adminGetLogs(lines = 300) {
+  return apiFetch(`/api/admin/logs?lines=${lines}`)
+}
+
+export async function adminBustCache() {
+  return apiFetch('/api/admin/cache/bust', { method: 'POST' })
+}
+
+export async function adminGetCacheInfo() {
+  return apiFetch('/api/admin/cache')
+}
