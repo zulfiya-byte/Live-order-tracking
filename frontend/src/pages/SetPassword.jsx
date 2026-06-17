@@ -16,11 +16,12 @@ export default function SetPassword() {
   const [error, setError]         = useState('')
   const [saving, setSaving]       = useState(false)
   const [invalidMsg, setInvalidMsg] = useState('')
+  const [isReset, setIsReset]       = useState(false)
 
   useEffect(() => {
     if (!token) { setStatus('invalid'); setInvalidMsg('No invite token found in the link.'); return }
     verifyInviteToken(token)
-      .then(d => { setEmail(d.email); setCompany(d.company_name); setStatus('valid') })
+      .then(d => { setEmail(d.email); setCompany(d.company_name); setIsReset(!!d.is_reset); setStatus('valid') })
       .catch(e => { setStatus('invalid'); setInvalidMsg(e.message) })
   }, [token])
 
@@ -80,9 +81,10 @@ export default function SetPassword() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h1 className="text-xl font-bold text-navy mb-2">Password Created!</h1>
+        <h1 className="text-xl font-bold text-navy mb-2">{isReset ? 'Password Reset!' : 'Password Created!'}</h1>
         <p className="text-slate-500 text-sm leading-relaxed mb-7">
-          Your account is ready. Sign in with <strong className="text-slate-700">{email}</strong> to access your orders.
+          {isReset ? 'Your password has been updated. Sign in with ' : 'Your account is ready. Sign in with '}
+          <strong className="text-slate-700">{email}</strong> to access your orders.
         </p>
         <button
           onClick={() => nav('/login')}
@@ -153,7 +155,7 @@ export default function SetPassword() {
                 <span className="w-2 h-2 rounded-full bg-brand" />
                 <span className="text-xs font-semibold" style={{ color: '#0369A1' }}>{company}</span>
               </div>
-              <h1 className="text-2xl font-bold text-navy mb-1">Create your password</h1>
+              <h1 className="text-2xl font-bold text-navy mb-1">{isReset ? 'Reset your password' : 'Create your password'}</h1>
               <p className="text-slate-500 text-sm">
                 You'll use <strong className="text-slate-700">{email}</strong> to sign in.
               </p>
@@ -227,8 +229,8 @@ export default function SetPassword() {
                 className="w-full btn-primary py-3 text-base flex items-center justify-center gap-2"
               >
                 {saving
-                  ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Setting up…</>
-                  : 'Activate My Account'}
+                  ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> {isReset ? 'Resetting…' : 'Setting up…'}</>
+                  : isReset ? 'Reset My Password' : 'Activate My Account'}
               </button>
             </form>
           </div>

@@ -511,7 +511,7 @@ def verify_invite(token: str):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT email, company_name, invite_expires_at FROM local_reference.clients WHERE invite_token = %s AND password_hash IS NULL",
+                "SELECT email, company_name, invite_expires_at, password_hash FROM local_reference.clients WHERE invite_token = %s",
                 (token,),
             )
             row = cur.fetchone()
@@ -527,7 +527,7 @@ def verify_invite(token: str):
     if expires.replace(tzinfo=None) < datetime.utcnow():
         raise HTTPException(status_code=400, detail="This invite link has expired. Please contact PXP for a new one.")
 
-    return {"email": row["email"], "company_name": row["company_name"]}
+    return {"email": row["email"], "company_name": row["company_name"], "is_reset": bool(row["password_hash"])}
 
 
 @app.post("/api/auth/set-password")
@@ -539,7 +539,7 @@ def set_password(body: SetPasswordRequest):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, email, company_name, invite_expires_at FROM local_reference.clients WHERE invite_token = %s AND password_hash IS NULL",
+                "SELECT id, email, company_name, invite_expires_at FROM local_reference.clients WHERE invite_token = %s",
                 (body.token,),
             )
             row = cur.fetchone()
