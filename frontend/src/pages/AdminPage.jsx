@@ -379,6 +379,11 @@ export default function AdminPage() {
     await fetchClients()
   }
 
+  async function handleToggleSuperAdmin(client) {
+    await adminUpdateClient(client.id, { is_super_admin: !client.is_super_admin })
+    await fetchClients()
+  }
+
   async function handleDeleteClient(id) {
     if (!confirm('Delete this client? This cannot be undone.')) return
     await adminDeleteClient(id)
@@ -514,7 +519,10 @@ export default function AdminPage() {
                     {c.invite_status === 'expired' && (
                       <span className="text-xs bg-red-100 text-red-600 px-1.5 rounded font-medium flex-shrink-0">Invite expired</span>
                     )}
-                    {c.is_admin && (
+                    {c.is_super_admin && (
+                      <span className="text-xs bg-purple-100 text-purple-700 px-1.5 rounded font-medium flex-shrink-0">Super Admin</span>
+                    )}
+                    {c.is_admin && !c.is_super_admin && (
                       <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 rounded font-medium flex-shrink-0">Admin</span>
                     )}
                     {c.contact_count > 0 && (
@@ -559,15 +567,26 @@ export default function AdminPage() {
               {superAdmin && (
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => handleToggleSuperAdmin(selected)}
+                    className={[
+                      'text-xs px-3 py-1.5 rounded-lg font-semibold transition',
+                      selected.is_super_admin
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    ].join(' ')}
+                  >
+                    {selected.is_super_admin ? 'Super Admin: On' : 'Super Admin: Off'}
+                  </button>
+                  <button
                     onClick={() => handleToggleAdmin(selected)}
                     className={[
                       'text-xs px-3 py-1.5 rounded-lg font-semibold transition',
-                      selected.is_admin
+                      selected.is_admin && !selected.is_super_admin
                         ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
                     ].join(' ')}
                   >
-                    {selected.is_admin ? 'Admin: On' : 'Admin: Off'}
+                    {selected.is_admin && !selected.is_super_admin ? 'Admin: On' : 'Admin: Off'}
                   </button>
                   <button
                     onClick={() => handleDeleteClient(selected.id)}

@@ -282,6 +282,7 @@ class UpdateClientRequest(BaseModel):
     password: Optional[str] = None
     company_name: Optional[str] = None
     is_admin: Optional[bool] = None
+    is_super_admin: Optional[bool] = None
 
 
 class AddContactRequest(BaseModel):
@@ -289,7 +290,7 @@ class AddContactRequest(BaseModel):
 
 
 _CLIENTS_SELECT = """
-    SELECT c.id, c.email, c.company_name, c.is_admin,
+    SELECT c.id, c.email, c.company_name, c.is_admin, c.is_super_admin,
            COUNT(cc.id) AS contact_count,
            CASE
              WHEN c.password_hash IS NOT NULL THEN 'active'
@@ -317,6 +318,7 @@ def admin_list_clients(user: dict = Depends(require_admin)):
             clients = cur.fetchall()
             for c in clients:
                 c["is_admin"] = bool(c["is_admin"])
+                c["is_super_admin"] = bool(c["is_super_admin"])
             return {"clients": clients}
     finally:
         conn.close()
@@ -481,6 +483,13 @@ def admin_update_client(client_id: int, body: UpdateClientRequest, user: dict = 
         if not is_super:
             raise HTTPException(status_code=403, detail="Only PXP admins can change admin status")
         fields.append("is_admin = %s"); args.append(int(body.is_admin))
+    if body.is_super_admin is not None:
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Only PXP admins can assign super admin")
+        # Granting super admin also ensures is_admin is set
+        fields.append("is_super_admin = %s"); args.append(int(body.is_super_admin))
+        if body.is_super_admin:
+            fields.append("is_admin = %s"); args.append(1)
 
     if not fields:
         raise HTTPException(status_code=400, detail="Nothing to update")
