@@ -49,7 +49,8 @@ export default function Dashboard() {
   const admin      = isAdmin()
   const superAdmin = isSuperAdmin()
 
-  const [viewingCompany, setViewingCompany] = useState(ownCompany)
+  // Super admins default to '' = all companies; regular users always see their own
+  const [viewingCompany, setViewingCompany] = useState(superAdmin ? '' : ownCompany)
   const [companySearch, setCompanySearch]   = useState('')
   const [companySuggestions, setCompanySuggestions] = useState([])
   const [showCompanyDrop, setShowCompanyDrop] = useState(false)
@@ -65,13 +66,14 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
-  const override = superAdmin && viewingCompany !== ownCompany ? viewingCompany : ''
+  // For super admins: empty string = all companies; a value = filtered to that company
+  const override = superAdmin ? viewingCompany : ''
 
   const fetchOrders = useCallback(async (filters, co) => {
     setLoading(true)
     setError('')
     try {
-      const data = await getOrders(filters, co ?? override)
+      const data = await getOrders(filters, co !== undefined ? co : override)
       if (data) setAllOrders(data.orders)
     } catch (e) {
       setError(e.message)
@@ -101,7 +103,7 @@ export default function Dashboard() {
   }, [companySearch, superAdmin])
 
   function selectCompany(c) {
-    setViewingCompany(c)
+    setViewingCompany(c)       // '' = all companies
     setCompanySearch('')
     setCompanySuggestions([])
     setShowCompanyDrop(false)
@@ -144,29 +146,46 @@ export default function Dashboard() {
             <div className="hidden sm:block border-l border-slate-200 pl-3">
               <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold leading-none mb-0.5">Order Portal</p>
               {superAdmin ? (
-                <div className="relative">
-                  <input
-                    ref={companyInputRef}
-                    value={companySearch || company}
-                    onChange={e => { setCompanySearch(e.target.value); setShowCompanyDrop(true) }}
-                    onFocus={() => { setCompanySearch(''); setShowCompanyDrop(true) }}
-                    onBlur={() => setTimeout(() => { setShowCompanyDrop(false); setCompanySearch('') }, 150)}
-                    className="text-sm font-bold text-navy leading-none bg-transparent border-b border-dashed border-brand/50 focus:outline-none focus:border-brand w-48 pr-4"
-                    placeholder="Search company…"
-                  />
-                  <svg className="absolute right-0 top-0.5 w-3 h-3 text-brand pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                  {showCompanyDrop && companySuggestions.length > 0 && (
-                    <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 w-64 max-h-56 overflow-y-auto">
-                      {companySuggestions.map(c => (
-                        <button key={c} type="button"
-                          onMouseDown={() => selectCompany(c)}
-                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 text-slate-700 hover:text-navy transition first:rounded-t-xl last:rounded-b-xl">
-                          {c}
-                        </button>
-                      ))}
-                    </div>
+                <div className="relative flex items-center gap-1.5">
+                  <div className="relative">
+                    <input
+                      ref={companyInputRef}
+                      value={companySearch || (viewingCompany ? viewingCompany : '')}
+                      onChange={e => { setCompanySearch(e.target.value); setShowCompanyDrop(true) }}
+                      onFocus={() => { setCompanySearch(''); setShowCompanyDrop(true) }}
+                      onBlur={() => setTimeout(() => { setShowCompanyDrop(false); setCompanySearch('') }, 150)}
+                      className="text-sm font-bold text-navy leading-none bg-transparent border-b border-dashed border-brand/50 focus:outline-none focus:border-brand w-44 pr-4"
+                      placeholder="All companies…"
+                    />
+                    <svg className="absolute right-0 top-0.5 w-3 h-3 text-brand pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                    {showCompanyDrop && (
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 w-64 max-h-56 overflow-y-auto">
+                        {viewingCompany && (
+                          <button type="button"
+                            onMouseDown={() => selectCompany('')}
+                            className="w-full text-left px-3 py-2.5 text-sm font-semibold hover:bg-purple-50 text-purple-700 transition first:rounded-t-xl">
+                            All Companies
+                          </button>
+                        )}
+                        {companySuggestions.map(c => (
+                          <button key={c} type="button"
+                            onMouseDown={() => selectCompany(c)}
+                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 text-slate-700 hover:text-navy transition last:rounded-b-xl">
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {viewingCompany && (
+                    <button onClick={() => selectCompany('')}
+                      className="text-slate-400 hover:text-slate-600 transition flex-shrink-0" title="Clear filter">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   )}
                 </div>
               ) : (

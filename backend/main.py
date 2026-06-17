@@ -85,7 +85,7 @@ def login(body: LoginRequest):
 
 # ── Orders ────────────────────────────────────────────────────────────────────
 
-_ORDERS_SQL = """
+_ORDERS_BASE = """
 SELECT
     o.ID_Order                                                              AS order_number,
     o.cn_TotalProductQty_Current                                            AS product_quantity,
@@ -122,9 +122,12 @@ LEFT JOIN shopworks.manifest m
 LEFT JOIN shopworks.manifest_lines ml
     ON ml.id_Manifest = m.ID_Manifest
     AND ml.TrackingNumber IS NOT NULL AND ml.TrackingNumber != ''
-WHERE o.CompanyName = %s
-  AND o.date_OrderPlaced >= DATE_FORMAT(CURDATE(), '%%Y-01-01')
 """
+
+# Used when a specific company must be shown
+_ORDERS_SQL = _ORDERS_BASE + "WHERE o.CompanyName = %s AND o.date_OrderPlaced >= DATE_FORMAT(CURDATE(), '%%Y-01-01')\n"
+# Used for super admins viewing all companies
+_ORDERS_SQL_ALL = _ORDERS_BASE + "WHERE o.date_OrderPlaced >= DATE_FORMAT(CURDATE(), '%%Y-01-01')\n"
 
 _ORDERS_GROUP_BY = """
 GROUP BY
@@ -209,13 +212,15 @@ def get_orders(
     user: dict = Depends(verify_token),
 ):
     is_super = user.get("is_super_admin")
+    # Super admin with no override = view all companies
+    view_all = is_super and not company_override
     company = (company_override if is_super and company_override else None) or user["company_name"]
     client_id = user["client_id"]
 
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            # Super admins see all orders for the company; regular users scoped to their contacts
+            # Super admins are never contact-scoped
             if is_super:
                 contact_emails = []
             else:
@@ -236,8 +241,12 @@ def get_orders(
                 "shipped": shipped,
             }, contact_emails)
 
-            sql = _ORDERS_SQL + extra_sql + _ORDERS_GROUP_BY + " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 1000"
-            cur.execute(sql, [company] + extra_args)
+            if view_all:
+                sql = _ORDERS_SQL_ALL + extra_sql + _ORDERS_GROUP_BY + " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 3000"
+                cur.execute(sql, extra_args)
+            else:
+                sql = _ORDERS_SQL + extra_sql + _ORDERS_GROUP_BY + " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 1000"
+                cur.execute(sql, [company] + extra_args)
             rows = cur.fetchall()
     finally:
         conn.close()
@@ -249,20 +258,33 @@ def get_orders(
 
 @app.get("/api/filters")
 def get_filters(company_override: str = None, user: dict = Depends(verify_token)):
-    company = (company_override if user.get("is_super_admin") and company_override else None) or user["company_name"]
+    is_super = user.get("is_super_admin")
+    view_all = is_super and not company_override
+    company = (company_override if is_super and company_override else None) or user["company_name"]
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT DISTINCT COALESCE(ot.name, CAST(o.id_OrderType AS CHAR)) AS order_type
-                FROM shopworks.orders o
-                LEFT JOIN local_reference.order_type ot ON CAST(ot.id AS UNSIGNED) = o.id_OrderType
-                WHERE o.CompanyName = %s AND ot.name IS NOT NULL
-                ORDER BY ot.name
-                """,
-                (company,),
-            )
+            if view_all:
+                cur.execute(
+                    """
+                    SELECT DISTINCT COALESCE(ot.name, CAST(o.id_OrderType AS CHAR)) AS order_type
+                    FROM shopworks.orders o
+                    LEFT JOIN local_reference.order_type ot ON CAST(ot.id AS UNSIGNED) = o.id_OrderType
+                    WHERE ot.name IS NOT NULL
+                    ORDER BY ot.name
+                    """
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT DISTINCT COALESCE(ot.name, CAST(o.id_OrderType AS CHAR)) AS order_type
+                    FROM shopworks.orders o
+                    LEFT JOIN local_reference.order_type ot ON CAST(ot.id AS UNSIGNED) = o.id_OrderType
+                    WHERE o.CompanyName = %s AND ot.name IS NOT NULL
+                    ORDER BY ot.name
+                    """,
+                    (company,),
+                )
             order_types = [r["order_type"] for r in cur.fetchall()]
     finally:
         conn.close()
