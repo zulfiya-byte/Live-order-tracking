@@ -1,4 +1,9 @@
 backend/.env
 backend/venv/
+backend/__pycache__/
 frontend/node_modules/
 frontend/dist/
+*.bak
+*.pyc
+.DS_Store
+"PXP Logo-02 (1).png"

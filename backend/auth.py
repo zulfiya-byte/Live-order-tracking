@@ -2,7 +2,7 @@ import os
 import bcrypt as _bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
-from fastapi import HTTPException, Security
+from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
@@ -12,10 +12,13 @@ JWT_TTL_H  = 8
 _bearer = HTTPBearer()
 
 
-def make_token(email: str, company_name: str) -> str:
+def make_token(email: str, client_id: int, company_name: str, is_admin: bool, view_all_orders: bool = False) -> str:
     payload = {
         "sub": email,
+        "client_id": client_id,
         "company_name": company_name,
+        "is_admin": is_admin,
+        "view_all_orders": view_all_orders,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_TTL_H),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
@@ -30,10 +33,15 @@ def verify_token(creds: HTTPAuthorizationCredentials = Security(_bearer)) -> dic
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+def require_admin(user: dict = Depends(verify_token)) -> dict:
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
 def check_password(plain: str, hashed: str) -> bool:
     return _bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def hash_password(plain: str) -> str:
-    """Utility — use this to generate hashes for the clients table."""
     return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt(12)).decode()

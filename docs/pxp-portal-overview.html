@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PXP Client Order Portal — Product Overview</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand: #29ABE2;
+      --navy: #002856;
+      --navy-light: #0F3460;
+      --text: #1E293B;
+      --muted: #64748B;
+      --border: #E2E8F0;
+      --bg-light: #F8FAFC;
+      --green: #16A34A;
+      --amber: #D97706;
+      --blue: #2563EB;
+      --purple: #7C3AED;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      background: #fff;
+      font-size: 10.5pt;
+      line-height: 1.6;
+    }
+
+    /* ── COVER PAGE ── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 60px 64px;
+      background: linear-gradient(160deg, #001f45 0%, #003a7a 60%, #0D6F94 100%);
+      color: white;
+      page-break-after: always;
+    }
+
+    .cover-logo {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .cover-logo-box {
+      background: white;
+      border-radius: 14px;
+      padding: 10px 18px;
+    }
+
+    .cover-logo-box img {
+      height: 36px;
+      display: block;
+    }
+
+    .cover-logo-text {
+      font-size: 11pt;
+      color: rgba(255,255,255,0.6);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+    }
+
+    .cover-body {
+      max-width: 580px;
+    }
+
+    .cover-badge {
+      display: inline-block;
+      background: rgba(41,171,226,0.25);
+      border: 1px solid rgba(41,171,226,0.5);
+      color: #7DDBF7;
+      font-size: 9pt;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 100px;
+      margin-bottom: 24px;
+    }
+
+    .cover h1 {
+      font-size: 36pt;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      color: white;
+    }
+
+    .cover h1 span {
+      color: #7DDBF7;
+    }
+
+    .cover-desc {
+      font-size: 12pt;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.7;
+      max-width: 480px;
+    }
+
+    .cover-meta {
+      display: flex;
+      gap: 40px;
+    }
+
+    .cover-meta-item label {
+      display: block;
+      font-size: 8pt;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+
+    .cover-meta-item span {
+      font-size: 10pt;
+      color: rgba(255,255,255,0.85);
+      font-weight: 500;
+    }
+
+    /* ── SHARED ── */
+    .page {
+      padding: 56px 64px;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    .page-break { page-break-before: always; }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .section-label .pill {
+      background: var(--brand);
+      color: white;
+      font-size: 8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 4px 12px;
+      border-radius: 100px;
+    }
+
+    .section-label hr {
+      flex: 1;
+      border: none;
+      border-top: 1px solid var(--border);
+    }
+
+    h2 {
+      font-size: 20pt;
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 10.5pt;
+      margin-bottom: 36px;
+    }
+
+    /* ── OVERVIEW GRID ── */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+
+    .overview-card {
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 22px;
+    }
+
+    .overview-card .icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      font-size: 16px;
+    }
+
+    .icon-blue  { background: #EFF6FF; }
+    .icon-green { background: #F0FDF4; }
+    .icon-amber { background: #FFFBEB; }
+    .icon-purple{ background: #F5F3FF; }
+
+    .overview-card h3 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 6px;
+    }
+
+    .overview-card p {
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── HOW IT WORKS FLOW ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-bottom: 36px;
+    }
+
+    .flow-step {
+      display: flex;
+      gap: 20px;
+      position: relative;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 17px;
+      top: 44px;
+      width: 2px;
+      height: calc(100% - 16px);
+      background: var(--border);
+    }
+
+    .flow-num {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: white;
+      font-size: 10pt;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .flow-content {
+      padding-bottom: 28px;
+    }
+
+    .flow-content h4 {
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 4px;
+    }
+
+    .flow-content p {
+      font-size: 9.5pt;
+      color: var(--muted);
+    }
+
+    /* ── FEATURE LIST ── */
+    .feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 36px;
+    }
+
+    .feature-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .feature-row:last-child { border-bottom: none; }
+
+    .feature-row .check {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #F0FDF4;
+      border: 1.5px solid #BBF7D0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+      font-size: 11px;
+    }
+
+    .feature-row .feat-text h4 {
+      font-size: 10pt;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .feature-row .feat-text p {
+      font-size: 9pt;
+      color: var(--muted);
+    }
+
+    /* ── USER TYPES ── */
+    .user-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+
+    .user-card {
+      border-radius: 14px;
+      padding: 22px;
+    }
+
+    .user-card.client { background: #EFF6FF; border: 1.5px solid #BFDBFE; }
+    .user-card.admin  { background: #F5F3FF; border: 1.5px solid #DDD6FE; }
+
+    .user-card h3 {
+      font-size: 11pt;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .user-card.client h3 { color: #1D4ED8; }
+    .user-card.admin  h3 { color: #6D28D9; }
+
+    .user-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .user-card ul li {
+      font-size: 9.5pt;
+      color: #374151;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .user-card ul li::before {
+      content: '→';
+      flex-shrink: 0;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+
+    .user-card.client ul li::before { color: #3B82F6; }
+    .user-card.admin  ul li::before { color: #7C3AED; }
+
+    /* ── V2 FEATURES ── */
+    .v2-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+
+    .v2-card {
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 22px;
+      position: relative;
+    }
+
+    .v2-card .priority {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      font-size: 8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 3px 9px;
+      border-radius: 100px;
+    }
+
+    .priority-high   { background: #FEF2F2; color: #DC2626; }
+    .priority-medium { background: #FFFBEB; color: #D97706; }
+    .priority-low    { background: #F0FDF4; color: #16A34A; }
+
+    .v2-card h3 {
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 8px;
+      padding-right: 60px;
+    }
+
+    .v2-card p {
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── TECH STACK ── */
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+
+    .stack-item {
+      background: var(--bg-light);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .stack-item label {
+      display: block;
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .stack-item span {
+      font-size: 10pt;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ── FOOTER ── */
+    .doc-footer {
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 1.5px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .doc-footer p {
+      font-size: 8.5pt;
+      color: var(--muted);
+    }
+
+    /* ── PRINT ── */
+    @media print {
+      body { font-size: 10pt; }
+      .cover { min-height: 100vh; }
+      .page { padding: 48px 56px; }
+
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════ COVER ══════════════════ -->
+<div class="cover">
+  <div class="cover-logo">
+    <div class="cover-logo-box">
+      <img src="../frontend/public/pxp-logo.png" alt="PXP Solutions" onerror="this.style.display='none';this.nextSibling.style.display='block'">
+      <span style="display:none;font-size:16pt;font-weight:800;color:#002856;letter-spacing:-0.02em;">PXP Solutions</span>
+    </div>
+    <span class="cover-logo-text">Internal Product Overview</span>
+  </div>
+
+  <div class="cover-body">
+    <div class="cover-badge">Product Overview · June 2026</div>
+    <h1>Client Order<br><span>Portal</span></h1>
+    <p class="cover-desc">
+      A secure, real-time order tracking portal that gives PXP clients direct visibility into their production status, shipment details, and order history — without any manual reporting.
+    </p>
+  </div>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <label>Prepared by</label>
+      <span>Internal Development</span>
+    </div>
+    <div class="cover-meta-item">
+      <label>Date</label>
+      <span>June 16, 2026</span>
+    </div>
+    <div class="cover-meta-item">
+      <label>Status</label>
+      <span>Version 1 — Live (Local)</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ PAGE 1: V1 OVERVIEW ══════════════════ -->
+<div class="page">
+
+  <div class="section-label">
+    <span class="pill">Version 1</span>
+    <hr>
+  </div>
+
+  <h2>What We Built</h2>
+  <p class="subtitle">A fully functional client portal connected live to ShopWorks, built and ready for deployment.</p>
+
+  <div class="overview-grid">
+    <div class="overview-card">
+      <div class="icon icon-blue">📦</div>
+      <h3>Live Order Dashboard</h3>
+      <p>Clients see their orders pulled directly from ShopWorks in real time. Organized into tabs: All, Active, Shipped, and On Hold.</p>
+    </div>
+    <div class="overview-card">
+      <div class="icon icon-green">🔐</div>
+      <h3>Secure Login System</h3>
+      <p>Each client has a unique email and password. Sessions are secured with encrypted tokens that expire after 8 hours.</p>
+    </div>
+    <div class="overview-card">
+      <div class="icon icon-amber">🎛️</div>
+      <h3>Admin Management Panel</h3>
+      <p>PXP staff can add, edit, and remove client accounts from a dedicated admin interface — no database access needed.</p>
+    </div>
+    <div class="overview-card">
+      <div class="icon icon-purple">🔭</div>
+      <h3>Scoped Order Visibility</h3>
+      <p>Each client only sees their own company's orders. Admins can further restrict access to specific contacts within a company.</p>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <h2 style="margin-bottom:8px;">How It Works</h2>
+  <p class="subtitle">End-to-end flow from onboarding a client to them viewing orders.</p>
+
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-num">1</div>
+      <div class="flow-content">
+        <h4>PXP staff adds a client in the Admin Panel</h4>
+        <p>Enter the client's email, company name (matched to ShopWorks), and optionally set a password directly or send an invite link.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">2</div>
+      <div class="flow-content">
+        <h4>Client receives access</h4>
+        <p>Either via an invite link (they set their own password) or with credentials set by admin. No IT involvement required.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">3</div>
+      <div class="flow-content">
+        <h4>Client logs in and sees their orders</h4>
+        <p>The portal pulls orders from ShopWorks filtered to their company. The dashboard shows live production status, ship dates, tracking numbers, and more.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">4</div>
+      <div class="flow-content">
+        <h4>Client filters, exports, and prints</h4>
+        <p>Clients can filter by date, status, contact, or design. They can export to CSV or print directly from the browser.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════ PAGE 2: V1 FEATURES ══════════════════ -->
+<div class="page page-break">
+
+  <div class="section-label">
+    <span class="pill">Version 1</span>
+    <hr>
+  </div>
+
+  <h2>Full Feature List</h2>
+  <p class="subtitle">Everything included in the current build.</p>
+
+  <div class="feature-list">
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>Order Dashboard with 20 data columns</h4>
+        <p>Order number, PO, contact, design, ship date, carrier, tracking, status flags, notes, and more — all from ShopWorks live data.</p>
+      </div>
+    </div>
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>Status tabs: All / Active / Shipped / On Hold</h4>
+        <p>One-click filtering with a live count badge on each tab.</p>
+      </div>
+    </div>
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>Stats bar</h4>
+        <p>At-a-glance counts for Total Orders, In Progress, Shipped, and On Hold shown at the top of every page.</p>
+      </div>
+    </div>
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>Advanced sidebar filters</h4>
+        <p>Filter by order number, PO, contact, design name, order type, ship date range, and shipment status.</p>
+      </div>
+    </div>
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>CSV export and print support</h4>
+        <p>Clients can download their filtered orders as a spreadsheet or print a clean, formatted version of the table.</p>
+      </div>
+    </div>
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>Mobile-friendly design</h4>
+        <p>Collapses to a card-based layout on phones and tablets. Filter drawer slides in from the side on small screens.</p>
+      </div>
+    </div>
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>Admin panel: client management</h4>
+        <p>Add, edit, and remove client accounts. Set passwords, toggle admin access, and resend invite links — all in a clean UI.</p>
+      </div>
+    </div>
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>Contact-based order access control</h4>
+        <p>Admins can restrict a client to only see orders belonging to specific contacts within their company.</p>
+      </div>
+    </div>
+    <div class="feature-row">
+      <div class="check">✓</div>
+      <div class="feat-text">
+        <h4>Invite link flow</h4>
+        <p>Send clients a secure invite link (72-hour expiry) to set their own password — no SMTP server required for basic use.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- User types -->
+  <h2 style="margin-bottom:8px;">User Types</h2>
+  <p class="subtitle">Two distinct access levels in the current system.</p>
+
+  <div class="user-cards">
+    <div class="user-card client">
+      <h3>Client User</h3>
+      <ul>
+        <li>Logs in with email and password</li>
+        <li>Sees their own company's orders only</li>
+        <li>Can filter, export, and print orders</li>
+        <li>Cannot see other clients or admin panel</li>
+      </ul>
+    </div>
+    <div class="user-card admin">
+      <h3>PXP Admin</h3>
+      <ul>
+        <li>Full client management (add/edit/delete)</li>
+        <li>Set passwords or send invite links</li>
+        <li>Control which orders each client can see</li>
+        <li>Access to both dashboard and admin panel</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Tech stack -->
+  <h2 style="margin-bottom:8px;">Technology</h2>
+  <p class="subtitle">Standard, maintainable stack — no external dependencies to manage.</p>
+
+  <div class="stack-grid">
+    <div class="stack-item">
+      <label>Frontend</label>
+      <span>React + Vite</span>
+    </div>
+    <div class="stack-item">
+      <label>Styling</label>
+      <span>Tailwind CSS</span>
+    </div>
+    <div class="stack-item">
+      <label>Backend</label>
+      <span>Python / FastAPI</span>
+    </div>
+    <div class="stack-item">
+      <label>Database</label>
+      <span>MySQL (ShopWorks + local)</span>
+    </div>
+    <div class="stack-item">
+      <label>Auth</label>
+      <span>JWT + bcrypt</span>
+    </div>
+    <div class="stack-item">
+      <label>Hosting</label>
+      <span>DigitalOcean Droplet</span>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════ PAGE 3: V2 PROPOSED ══════════════════ -->
+<div class="page page-break">
+
+  <div class="section-label">
+    <span class="pill" style="background: #7C3AED;">Version 2</span>
+    <hr>
+  </div>
+
+  <h2>Proposed Features</h2>
+  <p class="subtitle">Ideas to discuss — organized by impact and effort.</p>
+
+  <div class="v2-grid">
+
+    <div class="v2-card">
+      <span class="priority priority-high">High Priority</span>
+      <h3>Email Notifications on Status Change</h3>
+      <p>Automatically notify clients when their order ships, goes on hold, or hits a key milestone. Reduces inbound status calls to PXP staff.</p>
+    </div>
+
+    <div class="v2-card">
+      <span class="priority priority-high">High Priority</span>
+      <h3>Order Detail Page</h3>
+      <p>Clicking an order opens a full detail view with complete history, all status flags, tracking links, and any notes — without squinting at the table.</p>
+    </div>
+
+    <div class="v2-card">
+      <span class="priority priority-medium">Medium</span>
+      <h3>Cross-Company Order View</h3>
+      <p>A special access mode for clients managing multiple brands or locations — lets them see all their companies' orders in one view. (Already in development.)</p>
+    </div>
+
+    <div class="v2-card">
+      <span class="priority priority-medium">Medium</span>
+      <h3>Analytics Dashboard</h3>
+      <p>Charts showing order volume over time, on-time shipment rate, orders by type, and status breakdowns — so clients can spot patterns at a glance.</p>
+    </div>
+
+    <div class="v2-card">
+      <span class="priority priority-medium">Medium</span>
+      <h3>Customer Notes / Messaging</h3>
+      <p>A simple thread on each order where PXP staff can leave notes that clients can see. Replaces back-and-forth email for common questions.</p>
+    </div>
+
+    <div class="v2-card">
+      <span class="priority priority-medium">Medium</span>
+      <h3>Multi-Year Order History</h3>
+      <p>Currently shows the current year only. Extend to show past years with a date range picker so clients can look up older orders without contacting PXP.</p>
+    </div>
+
+    <div class="v2-card">
+      <span class="priority priority-low">Lower Priority</span>
+      <h3>Saved Filter Presets</h3>
+      <p>Let clients save commonly used filter combinations (e.g., "my Dallas orders, not shipped") and jump back to them with one click.</p>
+    </div>
+
+    <div class="v2-card">
+      <span class="priority priority-low">Lower Priority</span>
+      <h3>Branded Client Portals</h3>
+      <p>Ability to show a client's logo alongside PXP branding on their portal — makes the tool feel like a white-label service offering for larger accounts.</p>
+    </div>
+
+  </div>
+
+  <!-- Closing note -->
+  <div style="background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 14px; padding: 24px 28px; margin-bottom: 24px;">
+    <h3 style="font-size:11pt; color: var(--navy); margin-bottom: 8px;">Deployment</h3>
+    <p style="font-size:9.5pt; color: var(--muted); line-height: 1.7;">
+      Version 1 is complete and ready to deploy to the existing DigitalOcean server (143.198.14.93). No new infrastructure is required. Deployment involves uploading the backend service and building the frontend — estimated under 30 minutes. Client accounts can be created immediately after deployment via the admin panel.
+    </p>
+  </div>
+
+  <div class="doc-footer">
+    <p>PXP Solutions — Client Order Portal · Internal Overview · June 2026</p>
+    <p>Confidential</p>
+  </div>
+
+</div>
+
+</body>
+</html>
