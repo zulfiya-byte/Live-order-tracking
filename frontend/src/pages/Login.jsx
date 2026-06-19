@@ -103,7 +103,7 @@ export default function Login() {
             style={{ boxShadow: '0 4px 24px rgba(41,171,226,0.10), 0 1px 3px rgba(0,0,0,0.06)' }}>
             <div className="mb-7">
               <h1 className="text-2xl font-bold text-navy mb-1">Welcome back</h1>
-              <p className="text-slate-500 text-sm">Sign in to your order portal</p>
+              <p className="text-slate-500 text-sm">Sign in to your client portal</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">

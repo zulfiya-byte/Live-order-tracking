@@ -112,7 +112,7 @@ export default function SetPassword() {
             <img src="/pxp-logo.png" alt="PXP Solutions" className="h-10 object-contain" />
           </div>
           <h2 className="text-white text-2xl font-bold leading-tight mb-3 animate-slide-up">
-            Welcome to your<br />order portal.
+            Welcome to your<br />client portal.
           </h2>
           <p className="text-white/60 text-sm leading-relaxed animate-slide-up" style={{ animationDelay: '0.1s' }}>
             Just one step left — create your password to access real-time order tracking for <strong className="text-white/80">{company}</strong>.

@@ -441,7 +441,7 @@ export default function Dashboard() {
           <div className="hidden print:flex justify-between items-start px-4 py-4 border-b mb-2">
             <div>
               <h1 className="text-lg font-bold">{company} — {currentTab.label}</h1>
-              <p className="text-sm text-gray-600">PXP Solutions Order Portal</p>
+              <p className="text-sm text-gray-600">PXP Solutions Client Portal</p>
             </div>
             <p className="text-sm text-gray-500">
               {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
