@@ -1315,9 +1315,13 @@ DIST_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 if DIST_DIR.exists():
     app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
 
+    # index.html must never be cached, or browsers keep running an old bundle
+    # after a deploy. Hashed files under /assets are safe to cache (immutable).
+    _NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
         file_path = DIST_DIR / full_path
-        if file_path.exists() and file_path.is_file():
+        if full_path and full_path != "index.html" and file_path.exists() and file_path.is_file():
             return FileResponse(str(file_path))
-        return FileResponse(str(DIST_DIR / "index.html"))
+        return FileResponse(str(DIST_DIR / "index.html"), headers=_NO_CACHE)

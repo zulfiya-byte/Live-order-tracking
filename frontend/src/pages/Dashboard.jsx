@@ -233,7 +233,9 @@ export default function Dashboard() {
           {/* Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Mobile: company name */}
-            <p className="sm:hidden text-sm font-bold text-navy mr-0.5 truncate max-w-[28vw]">{company}</p>
+            <p className="sm:hidden text-sm font-bold text-navy mr-0.5 truncate max-w-[40vw]">
+              {superAdmin ? (viewingCompany || 'All companies') : company}
+            </p>
 
             {/* Year selector */}
             <div className="relative">
