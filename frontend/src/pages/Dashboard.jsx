@@ -126,7 +126,7 @@ export default function Dashboard() {
   }
 
   const displayedOrders = useMemo(() => {
-    if (activeTab === 'active')  return allOrders.filter(o => !o.shipped)
+    if (activeTab === 'active')  return allOrders.filter(o => !o.closed)
     if (activeTab === 'shipped') return allOrders.filter(o => o.shipped)
     if (activeTab === 'onhold')  return allOrders.filter(o => o.on_hold)
     if (activeTab === 'overdue') return allOrders.filter(isOverdue)
@@ -134,7 +134,7 @@ export default function Dashboard() {
   }, [allOrders, activeTab])
 
   const tabCount = useCallback((id) => {
-    if (id === 'active')  return allOrders.filter(o => !o.shipped).length
+    if (id === 'active')  return allOrders.filter(o => !o.closed).length
     if (id === 'shipped') return allOrders.filter(o => o.shipped).length
     if (id === 'onhold')  return allOrders.filter(o => o.on_hold).length
     if (id === 'overdue') return allOrders.filter(isOverdue).length

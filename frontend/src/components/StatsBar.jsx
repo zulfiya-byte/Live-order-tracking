@@ -40,7 +40,7 @@ export default function StatsBar({ orders, showOverdue }) {
   const [hovered, setHovered] = useState(null)
 
   const total   = orders.length
-  const active  = orders.filter(o => !o.shipped).length
+  const active  = orders.filter(o => !o.closed).length
   const shipped = orders.filter(o => o.shipped).length
   const onHold  = orders.filter(o => o.on_hold).length
   const overdue = orders.filter(isOverdue).length

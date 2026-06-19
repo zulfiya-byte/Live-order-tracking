@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react'
 export const TODAY = new Date().toISOString().slice(0, 10)
 
 export function isOverdue(o) {
-  return !o.shipped && o.request_to_ship_date && o.request_to_ship_date.slice(0, 10) < TODAY
+  // Closed orders (shipped / N/A / not required) can't be overdue.
+  return !o.closed && o.request_to_ship_date && o.request_to_ship_date.slice(0, 10) < TODAY
 }
 
 export function trackingUrl(num) {
@@ -198,6 +199,15 @@ function StatusBadge({ row, showOverdue }) {
       Shipped
     </span>
   )
+  if (row.closed) return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full"
+      style={{ background: '#F1F5F9', color: '#475569' }}>
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+      Complete
+    </span>
+  )
   if (showOverdue && isOverdue(row)) return (
     <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full"
       style={{ background: '#FEE2E2', color: '#B91C1C' }}>
@@ -253,9 +263,9 @@ function InfoPair({ label, value }) {
 
 function MobileCard({ row, i, onClick, showOverdue }) {
   const overdue     = showOverdue && isOverdue(row)
-  const accentColor = row.shipped ? '#16A34A' : overdue ? '#DC2626' : row.on_hold ? '#D97706' : '#0369A1'
-  const borderColor = row.shipped ? '#BBF7D0' : overdue ? '#FECACA' : row.on_hold ? '#FDE68A' : '#BFDBFE'
-  const bgColor     = row.shipped ? '#F0FDF4' : overdue ? '#FEF2F2' : row.on_hold ? '#FFFBEB' : '#FFFFFF'
+  const accentColor = row.shipped ? '#16A34A' : row.closed ? '#64748B' : overdue ? '#DC2626' : row.on_hold ? '#D97706' : '#0369A1'
+  const borderColor = row.shipped ? '#BBF7D0' : row.closed ? '#E2E8F0' : overdue ? '#FECACA' : row.on_hold ? '#FDE68A' : '#BFDBFE'
+  const bgColor     = row.shipped ? '#F0FDF4' : row.closed ? '#F8FAFC' : overdue ? '#FEF2F2' : row.on_hold ? '#FFFBEB' : '#FFFFFF'
 
   return (
     <div

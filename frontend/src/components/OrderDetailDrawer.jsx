@@ -32,6 +32,29 @@ function FlagRow({ label, value, warn }) {
   )
 }
 
+// ShopWorks status codes: 1 = done, 0 = pending, 0.5 = partial,
+// 222 = not required, 8 = N/A.
+function codeLabel(code) {
+  if (code === 1)   return { text: 'Done',         color: '#166534', bg: '#DCFCE7' }
+  if (code === 0.5) return { text: 'Partial',      color: '#B45309', bg: '#FEF3C7' }
+  if (code === 222) return { text: 'Not required', color: '#475569', bg: '#F1F5F9' }
+  if (code === 8)   return { text: 'N/A',          color: '#475569', bg: '#F1F5F9' }
+  return { text: 'Pending', color: '#94A3B8', bg: '#F8FAFC' }
+}
+
+function CodeRow({ label, code }) {
+  const { text, color, bg } = codeLabel(code)
+  return (
+    <div className="flex justify-between items-center gap-4 py-2 border-b border-slate-100 last:border-0">
+      <dt className="text-xs font-semibold text-slate-400">{label}</dt>
+      <dd>
+        <span className="inline-flex items-center text-xs font-bold px-2 py-0.5 rounded-full"
+          style={{ color, background: bg }}>{text}</span>
+      </dd>
+    </div>
+  )
+}
+
 function Step({ done, label }) {
   return (
     <div className="flex flex-col items-center gap-1 flex-1">
@@ -134,10 +157,10 @@ export default function OrderDetailDrawer({ order, onClose, showOverdue }) {
             <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-1">Status</p>
             <dl>
               <FlagRow label="On Hold" value={order.on_hold} warn />
-              <FlagRow label="Art Done" value={order.art_complete} />
-              <FlagRow label="Purchased" value={order.purchased} />
-              <FlagRow label="Received Garments" value={order.received_garments} />
-              <FlagRow label="Shipped" value={order.shipped} />
+              <CodeRow label="Art Done" code={order.art_code} />
+              <CodeRow label="Purchased" code={order.purchased_code} />
+              <CodeRow label="Received Garments" code={order.received_code} />
+              <CodeRow label="Shipped" code={order.shipped_code} />
             </dl>
           </div>
 

@@ -240,8 +240,15 @@ SELECT
     (o.cn_sts_HoldOrderGraphic = '10')                                      AS on_hold,
     (o.sts_ArtDone = 1)                                                     AS art_complete,
     (o.sts_Purchased = 1)                                                   AS purchased,
-    (o.sts_Received >= 1)                                                   AS received_garments,
+    (o.sts_Received = 1)                                                    AS received_garments,
     (o.sts_Shipped = 1)                                                     AS shipped,
+    -- An order is "closed" once its shipping status is resolved (1=shipped,
+    -- 8=N/A, 222=not required). Only 0 (pending) stays Active.
+    (o.sts_Shipped >= 1)                                                    AS closed,
+    o.sts_ArtDone                                                           AS art_code,
+    o.sts_Purchased                                                         AS purchased_code,
+    o.sts_Received                                                          AS received_code,
+    o.sts_Shipped                                                           AS shipped_code,
     o.date_OrderShipped                                                     AS ship_date,
     GROUP_CONCAT(DISTINCT m.ShipMethod ORDER BY m.ShipMethod SEPARATOR ', ') AS carrier,
     GROUP_CONCAT(DISTINCT pi.TrackingNumber ORDER BY pi.TrackingNumber SEPARATOR ', ') AS tracking_number,
@@ -283,7 +290,8 @@ GROUP BY
 """
 
 _DATE_COLS = ("request_to_ship_date", "approx_po_date", "ship_date")
-_BOOL_COLS = ("on_hold", "art_complete", "purchased", "received_garments", "shipped")
+_BOOL_COLS = ("on_hold", "art_complete", "purchased", "received_garments", "shipped", "closed")
+_CODE_COLS = ("art_code", "purchased_code", "received_code", "shipped_code")
 
 
 def _build_filter_clause(params: dict, contact_emails: list = None, ae_names: list = None, company_names: list = None) -> tuple:
@@ -355,6 +363,9 @@ def _serialize_rows(rows: list) -> list:
                 row[col] = str(row[col])
         for col in _BOOL_COLS:
             row[col] = bool(row.get(col))
+        for col in _CODE_COLS:
+            v = row.get(col)
+            row[col] = float(v) if v is not None else None
     return rows
 
 
