@@ -28,6 +28,7 @@ export default function Sidebar({ orderTypes, suggestions = {}, onFilter, loadin
   function clearOne(key) {
     const updated = { ...filters, [key]: '' }
     setFilters(updated)
+    onFilter(updated)  // re-run search immediately so results match the visible chips
   }
 
   function apply() { onFilter(filters) }

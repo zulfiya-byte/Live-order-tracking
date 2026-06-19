@@ -426,10 +426,13 @@ export default function AdminPage() {
   const [resendLink, setResendLink]     = useState('')
   const [resendCopied, setResendCopied] = useState(false)
   const [search, setSearch]             = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [saving, setSaving]             = useState(false)
   const [resending, setResending]       = useState(false)
   const [editingCompany, setEditingCompany] = useState(false)
   const [companyDraft, setCompanyDraft]     = useState('')
+  const [editingEmail, setEditingEmail]     = useState(false)
+  const [emailDraft, setEmailDraft]         = useState('')
   const [companySuggestionsEdit, setCompanySuggestionsEdit] = useState([])
   const [showCompanyEditDrop, setShowCompanyEditDrop]       = useState(false)
   const inputRef = useRef(null)
@@ -463,6 +466,8 @@ export default function AdminPage() {
   useEffect(() => {
     setEditingCompany(false)
     setCompanyDraft('')
+    setEditingEmail(false)
+    setEmailDraft('')
     setResendLink('')
     setResendCopied(false)
     if (!selectedId) { setContacts([]); setAeAccess([]); setCompanyAccess([]); setMobileShowDetail(false); return }
@@ -525,9 +530,30 @@ export default function AdminPage() {
     }
   }
 
+  async function handleSaveEmail() {
+    const next = emailDraft.trim()
+    if (!next || next === selected?.email) { setEditingEmail(false); return }
+    try {
+      await adminUpdateClient(selectedId, { email: next })
+      setEditingEmail(false)
+      setEmailDraft('')
+      await fetchClients()
+    } catch (e) {
+      alert(e.message)
+    }
+  }
+
   async function handleToggleSuperAdmin(client) {
+    if (!client.is_super_admin &&
+        !confirm(`Grant Super Admin to ${client.email}?\n\nThey will be able to see and manage ALL companies, orders, and clients.`)) {
+      return
+    }
     await adminUpdateClient(client.id, { is_super_admin: !client.is_super_admin })
     await fetchClients()
+  }
+
+  function handleViewAsClient(client) {
+    nav(`/dashboard?company=${encodeURIComponent(client.company_name)}`)
   }
 
   useEffect(() => {
@@ -561,6 +587,7 @@ export default function AdminPage() {
   async function handleRemoveAeAccess(mappingId) {
     await adminRemoveAeAccess(mappingId)
     setAeAccess(a => a.filter(x => x.id !== mappingId))
+    await fetchClients()
   }
 
   async function handleAddCompanyAccess() {
@@ -577,6 +604,7 @@ export default function AdminPage() {
   async function handleRemoveCompanyAccess(mappingId) {
     await adminRemoveCompanyAccess(mappingId)
     setCompanyAccess(a => a.filter(x => x.id !== mappingId))
+    await fetchClients()
   }
 
   async function handleToggleViewAllOrders(client) {
@@ -619,9 +647,20 @@ export default function AdminPage() {
     }
   }
 
-  const filteredClients = clients.filter(c =>
-    !search || c.email.toLowerCase().includes(search.toLowerCase()) || c.company_name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredClients = clients.filter(c => {
+    const matchesSearch = !search ||
+      c.email.toLowerCase().includes(search.toLowerCase()) ||
+      c.company_name.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus = statusFilter === 'all' || c.invite_status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
+  const STATUS_FILTERS = [
+    { id: 'all',     label: 'All' },
+    { id: 'active',  label: 'Active' },
+    { id: 'pending', label: 'Pending' },
+    { id: 'expired', label: 'Expired' },
+  ]
 
   function handleLogout() { logout(); nav('/login') }
 
@@ -739,6 +778,23 @@ export default function AdminPage() {
               placeholder="Search clients…"
               className="input py-1.5"
             />
+            <div className="flex items-center gap-1 mt-2.5">
+              {STATUS_FILTERS.map(f => {
+                const active = statusFilter === f.id
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setStatusFilter(f.id)}
+                    className={[
+                      'text-xs font-semibold px-2.5 py-1 rounded-lg transition',
+                      active ? 'bg-brand text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+                    ].join(' ')}
+                  >
+                    {f.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
@@ -820,7 +876,36 @@ export default function AdminPage() {
                   <span className="text-white text-sm font-bold">{initials(selected.email)}</span>
                 </div>
                 <div>
-                  <p className="font-bold text-navy text-sm">{selected.email}</p>
+                  {editingEmail ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        type="email"
+                        value={emailDraft}
+                        onChange={e => setEmailDraft(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEmail(); if (e.key === 'Escape') { setEditingEmail(false); setEmailDraft('') } }}
+                        className="text-sm font-bold text-navy border border-brand rounded px-2 py-0.5 focus:outline-none w-52"
+                        placeholder="email@company.com"
+                      />
+                      <button onClick={handleSaveEmail} className="text-[10px] font-bold px-2 py-0.5 rounded bg-brand text-white">Save</button>
+                      <button onClick={() => { setEditingEmail(false); setEmailDraft('') }} className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">✕</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <p className="font-bold text-navy text-sm">{selected.email}</p>
+                      {superAdmin && (
+                        <button
+                          onClick={() => { setEditingEmail(true); setEmailDraft(selected.email) }}
+                          className="w-3.5 h-3.5 text-slate-400 hover:text-brand transition flex-shrink-0"
+                          title="Change email"
+                        >
+                          <svg fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {editingCompany ? (
                     <div className="relative flex items-center gap-1 mt-0.5">
                       <div className="relative">
@@ -868,7 +953,18 @@ export default function AdminPage() {
                 </div>
               </div>
               {superAdmin && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <button
+                    onClick={() => handleViewAsClient(selected)}
+                    className="text-xs px-3 py-1.5 rounded-lg font-semibold transition bg-sky-100 text-sky-700 hover:bg-sky-200 flex items-center gap-1.5"
+                    title="Open the dashboard scoped to this client's company"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    View as
+                  </button>
                   <button
                     onClick={() => handleToggleSuperAdmin(selected)}
                     className={[

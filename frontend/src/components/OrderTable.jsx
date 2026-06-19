@@ -1,6 +1,13 @@
 import { useState, useMemo } from 'react'
 
-function trackingUrl(num) {
+// Local date (YYYY-MM-DD) — used to flag orders past their requested ship date.
+export const TODAY = new Date().toISOString().slice(0, 10)
+
+export function isOverdue(o) {
+  return !o.shipped && o.request_to_ship_date && o.request_to_ship_date.slice(0, 10) < TODAY
+}
+
+export function trackingUrl(num) {
   const n = num.trim()
   if (/^1Z/i.test(n))          return `https://www.ups.com/track?tracknum=${n}`
   if (/^\d{12,22}$/.test(n))   return `https://www.fedex.com/apps/fedextrack/?tracknums=${n}`
@@ -8,7 +15,7 @@ function trackingUrl(num) {
   return null
 }
 
-function TrackingLinks({ value, className = '' }) {
+export function TrackingLinks({ value, className = '' }) {
   if (!value) return <span className="text-slate-300">—</span>
   const nums = value.split(',').map(s => s.trim()).filter(Boolean)
   return (
@@ -18,6 +25,7 @@ function TrackingLinks({ value, className = '' }) {
         const display = n.length > 20 ? n.slice(0, 18) + '…' : n
         return url ? (
           <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
             className="inline-flex items-center gap-1 font-mono text-xs tabular-nums transition-colors"
             style={{ color: '#1D4ED8' }}
             onMouseEnter={e => e.currentTarget.style.color = '#1E40AF'}
@@ -128,7 +136,13 @@ function Cell({ col, row }) {
   }
 
   if (col.type === 'date') {
-    return <span className="font-mono tabular-nums text-slate-600 text-[11px]">{val}</span>
+    const overdue = col.key === 'request_to_ship_date' && isOverdue(row)
+    return (
+      <span className={`font-mono tabular-nums text-[11px] ${overdue ? 'text-red-600 font-bold' : 'text-slate-600'}`}
+        title={overdue ? 'Past requested ship date' : undefined}>
+        {val}{overdue && ' ⚠'}
+      </span>
+    )
   }
 
   if ((col.type === 'note' || col.type === 'text') && typeof val === 'string' && val.length > 26) {
@@ -148,6 +162,15 @@ function StatusBadge({ row }) {
         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
       </svg>
       Shipped
+    </span>
+  )
+  if (isOverdue(row)) return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full"
+      style={{ background: '#FEE2E2', color: '#B91C1C' }}>
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      Overdue
     </span>
   )
   if (row.on_hold) return (
@@ -194,14 +217,16 @@ function InfoPair({ label, value }) {
   )
 }
 
-function MobileCard({ row, i }) {
-  const accentColor = row.shipped ? '#16A34A' : row.on_hold ? '#D97706' : '#0369A1'
-  const borderColor = row.shipped ? '#BBF7D0' : row.on_hold ? '#FDE68A' : '#BFDBFE'
-  const bgColor     = row.shipped ? '#F0FDF4' : row.on_hold ? '#FFFBEB' : '#FFFFFF'
+function MobileCard({ row, i, onClick }) {
+  const overdue     = isOverdue(row)
+  const accentColor = row.shipped ? '#16A34A' : overdue ? '#DC2626' : row.on_hold ? '#D97706' : '#0369A1'
+  const borderColor = row.shipped ? '#BBF7D0' : overdue ? '#FECACA' : row.on_hold ? '#FDE68A' : '#BFDBFE'
+  const bgColor     = row.shipped ? '#F0FDF4' : overdue ? '#FEF2F2' : row.on_hold ? '#FFFBEB' : '#FFFFFF'
 
   return (
     <div
-      className="rounded-2xl overflow-hidden animate-slide-up"
+      onClick={onClick}
+      className="rounded-2xl overflow-hidden animate-slide-up cursor-pointer active:scale-[0.99] transition-transform"
       style={{
         animationDelay: `${Math.min(i, 9) * 0.04}s`,
         background: bgColor,
@@ -358,7 +383,7 @@ function SkeletonRows() {
   )
 }
 
-export default function OrderTable({ orders, loading, error, tabKey }) {
+export default function OrderTable({ orders, loading, error, tabKey, onRowClick }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
 
   function handleSort(colKey) {
@@ -444,7 +469,7 @@ export default function OrderTable({ orders, loading, error, tabKey }) {
       <div className="md:hidden flex-1 overflow-y-auto">
         <div className="p-3 flex flex-col gap-3">
           {sorted.map((row, i) => (
-            <MobileCard key={`${row.order_number}-${i}`} row={row} i={i} />
+            <MobileCard key={`${row.order_number}-${i}`} row={row} i={i} onClick={() => onRowClick?.(row)} />
           ))}
         </div>
       </div>
@@ -484,7 +509,8 @@ export default function OrderTable({ orders, loading, error, tabKey }) {
             {sorted.map((row, i) => (
               <tr
                 key={`${row.order_number}-${i}`}
-                className={[row.on_hold ? 'on-hold-row' : '', 'border-b border-slate-100 transition-colors duration-100'].join(' ')}
+                onClick={() => onRowClick?.(row)}
+                className={[row.on_hold ? 'on-hold-row' : '', 'border-b border-slate-100 transition-colors duration-100 cursor-pointer'].join(' ')}
                 style={row.on_hold ? { background: '#FFFBEB' } : { background: i % 2 === 0 ? '#fff' : '#F8FAFC' }}
                 onMouseEnter={e => {
                   e.currentTarget.style.background = row.on_hold ? '#FEF3C7' : '#EFF6FF'

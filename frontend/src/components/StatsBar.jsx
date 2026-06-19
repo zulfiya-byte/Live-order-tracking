@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isOverdue } from './OrderTable'
 
 const STATS = [
   {
@@ -26,6 +27,13 @@ const STATS = [
     accent: '#D97706',
     iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
   },
+  {
+    key: 'overdue',
+    label: 'Overdue',
+    accent: '#DC2626',
+    pulse: true,
+    iconPath: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+  },
 ]
 
 export default function StatsBar({ orders }) {
@@ -35,10 +43,11 @@ export default function StatsBar({ orders }) {
   const active  = orders.filter(o => !o.shipped).length
   const shipped = orders.filter(o => o.shipped).length
   const onHold  = orders.filter(o => o.on_hold).length
-  const values  = { total, active, shipped, onHold }
+  const overdue = orders.filter(isOverdue).length
+  const values  = { total, active, shipped, onHold, overdue }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 sm:px-5 py-3 flex-shrink-0 print:hidden">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 px-4 sm:px-5 py-3 flex-shrink-0 print:hidden">
       {STATS.map((s, i) => {
         const isHovered = hovered === s.key
         const val = values[s.key]

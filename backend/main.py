@@ -141,10 +141,8 @@ def warm_order_cache():
             conn = get_conn()
             try:
                 with conn.cursor() as cur:
-                    cur.execute(
-                        _ORDERS_SQL_ALL + _ORDERS_GROUP_BY +
-                        " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 3000"
-                    )
+                    sql, year_args = _orders_query(True, year, "", 3000)
+                    cur.execute(sql, year_args)
                     rows = _serialize_rows(cur.fetchall())
                 cache_set(f"orders:ALL:{year}", rows)
                 log.info(f"Cache warm: ALL ({len(rows)} rows)")
@@ -173,11 +171,8 @@ def warm_order_cache():
                     conn = get_conn()
                     try:
                         with conn.cursor() as cur:
-                            cur.execute(
-                                _ORDERS_SQL + _ORDERS_GROUP_BY +
-                                " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 1000",
-                                [company],
-                            )
+                            sql, year_args = _orders_query(False, year, "", 1000)
+                            cur.execute(sql, [company] + year_args)
                             rows = _serialize_rows(cur.fetchall())
                         cache_set(f"orders:{company}:{year}", rows)
                         log.info(f"Cache warm: {company} ({len(rows)} rows)")
@@ -272,9 +267,9 @@ LEFT JOIN shopworks.pack_import pi
 """
 
 # Used when a specific company must be shown
-_ORDERS_SQL = _ORDERS_BASE + "WHERE o.CompanyName = %s AND o.date_OrderPlaced >= DATE_FORMAT(CURDATE(), '%%Y-01-01')\n"
+_ORDERS_SQL = _ORDERS_BASE + "WHERE o.CompanyName = %s "
 # Used for super admins viewing all companies
-_ORDERS_SQL_ALL = _ORDERS_BASE + "WHERE o.date_OrderPlaced >= DATE_FORMAT(CURDATE(), '%%Y-01-01')\n"
+_ORDERS_SQL_ALL = _ORDERS_BASE + "WHERE 1=1 "
 
 _ORDERS_GROUP_BY = """
 GROUP BY
@@ -299,15 +294,19 @@ def _build_filter_clause(params: dict, contact_emails: list = None, ae_names: li
         clauses.append(f"AND o.ct_ContactNameFull IN ({placeholders})")
         args.extend(contact_emails)
 
+    # AE access and company access are additive (OR): a view_all user sees an
+    # order when its AE matches OR its company matches one of their grants.
+    access_or = []
     if ae_names:
         placeholders = ','.join(['%s'] * len(ae_names))
-        clauses.append(f"AND TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) IN ({placeholders})")
+        access_or.append(f"TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) IN ({placeholders})")
         args.extend(ae_names)
-
     if company_names:
         placeholders = ','.join(['%s'] * len(company_names))
-        clauses.append(f"AND o.CompanyName IN ({placeholders})")
+        access_or.append(f"o.CompanyName IN ({placeholders})")
         args.extend(company_names)
+    if access_or:
+        clauses.append("AND (" + " OR ".join(access_or) + ")")
 
     if params.get("order_number"):
         try:
@@ -359,6 +358,20 @@ def _serialize_rows(rows: list) -> list:
     return rows
 
 
+def _orders_query(view_all: bool, year: int, extra_sql: str, limit: int) -> tuple:
+    """Build the full orders SQL for a given year. Returns (sql, year_args).
+
+    The year is applied as a half-open range on date_OrderPlaced so the index
+    can be used (avoids wrapping the column in YEAR()).
+    """
+    year_sql = "AND o.date_OrderPlaced >= %s AND o.date_OrderPlaced < %s "
+    year_args = [f"{year}-01-01", f"{year + 1}-01-01"]
+    base = _ORDERS_SQL_ALL if view_all else _ORDERS_SQL
+    sql = (base + year_sql + extra_sql + _ORDERS_GROUP_BY +
+           f" ORDER BY o.date_OrderRequestedToShip DESC LIMIT {int(limit)}")
+    return sql, year_args
+
+
 @app.get("/api/orders")
 def get_orders(
     order_number: str = None,
@@ -370,6 +383,7 @@ def get_orders(
     ship_date_to: str = None,
     shipped: str = None,
     company_override: str = None,
+    year: int = None,
     user: dict = Depends(verify_token),
 ):
     is_super = user.get("is_super_admin")
@@ -378,7 +392,9 @@ def get_orders(
     company = (company_override if is_super and company_override else None) or user["company_name"]
     client_id = user["client_id"]
 
-    year = datetime.now().year
+    current_year = datetime.now().year
+    # Clamp to a sane range so a bad query param can't build odd date strings.
+    year = year if year and 2000 <= year <= current_year + 1 else current_year
     cache_key = f"orders:{'ALL' if view_all else company}:{year}"
     no_filters = not any([order_number, purchase_order, order_contact, design_name, order_type, ship_date_from, ship_date_to, shipped])
 
@@ -424,11 +440,11 @@ def get_orders(
                     return {"orders": cached, "count": len(cached), "cached": True}
 
             if view_all:
-                sql = _ORDERS_SQL_ALL + extra_sql + _ORDERS_GROUP_BY + " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 3000"
-                cur.execute(sql, extra_args)
+                sql, year_args = _orders_query(True, year, extra_sql, 3000)
+                cur.execute(sql, year_args + extra_args)
             else:
-                sql = _ORDERS_SQL + extra_sql + _ORDERS_GROUP_BY + " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 1000"
-                cur.execute(sql, [company] + extra_args)
+                sql, year_args = _orders_query(False, year, extra_sql, 1000)
+                cur.execute(sql, [company] + year_args + extra_args)
             rows = cur.fetchall()
     finally:
         conn.close()

@@ -85,7 +85,7 @@ export default function Login() {
         </div>
 
         <p className="text-white/30 text-xs relative animate-fade-in" style={{ animationDelay: '0.6s' }}>
-          © 2025 PXP Solutions. All rights reserved.
+          © {new Date().getFullYear()} PXP Solutions. All rights reserved.
         </p>
       </div>
 

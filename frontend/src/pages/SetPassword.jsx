@@ -133,7 +133,7 @@ export default function SetPassword() {
           ))}
         </div>
 
-        <p className="text-white/30 text-xs relative">© 2025 PXP Solutions.</p>
+        <p className="text-white/30 text-xs relative">© {new Date().getFullYear()} PXP Solutions.</p>
       </div>
 
       {/* Right panel */}

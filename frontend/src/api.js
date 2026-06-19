@@ -61,10 +61,11 @@ async function apiFetch(path, opts = {}) {
   return res.json()
 }
 
-export async function getOrders(filters = {}, companyOverride = '') {
+export async function getOrders(filters = {}, companyOverride = '', year = '') {
   const params = new URLSearchParams()
   Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v) })
   if (companyOverride) params.set('company_override', companyOverride)
+  if (year) params.set('year', year)
   return apiFetch(`/api/orders?${params}`)
 }
 

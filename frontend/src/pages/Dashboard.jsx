@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { getOrders, getFilters, logout, isAdmin, isSuperAdmin, isViewAllOrders, adminGetCompanies } from '../api'
 import Sidebar from '../components/Sidebar'
-import OrderTable, { COLS } from '../components/OrderTable'
+import OrderTable, { COLS, isOverdue } from '../components/OrderTable'
+import OrderDetailDrawer from '../components/OrderDetailDrawer'
 import StatsBar from '../components/StatsBar'
 
 const TABS = [
@@ -10,7 +11,11 @@ const TABS = [
   { id: 'active',  label: 'Active',      count_key: 'active',  color: '#0369A1' },
   { id: 'shipped', label: 'Shipped',     count_key: 'shipped', color: '#16A34A' },
   { id: 'onhold',  label: 'On Hold',     count_key: 'onhold',  color: '#D97706' },
+  { id: 'overdue', label: 'Overdue',     count_key: 'overdue', color: '#DC2626' },
 ]
+
+const CURRENT_YEAR = new Date().getFullYear()
+const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i)
 
 function greeting() {
   const h = new Date().getHours()
@@ -45,13 +50,21 @@ function exportCSV(orders, tabLabel, company) {
 
 export default function Dashboard() {
   const nav = useNavigate()
+  const [params] = useSearchParams()
   const ownCompany = localStorage.getItem('pxp_company') || ''
   const admin      = isAdmin()
   const superAdmin = isSuperAdmin()
   const viewAllOrders = isViewAllOrders()
 
+  // "View as client" deep-link: ?company=Acme scopes a super admin to that company.
+  const companyParam = params.get('company') || ''
+
   // Super admins and viewAllOrders users default to '' = all companies; regular users always see their own
-  const [viewingCompany, setViewingCompany] = useState(superAdmin || viewAllOrders ? '' : ownCompany)
+  const [viewingCompany, setViewingCompany] = useState(
+    companyParam && superAdmin ? companyParam : (superAdmin || viewAllOrders ? '' : ownCompany)
+  )
+  const [year, setYear] = useState(CURRENT_YEAR)
+  const [selectedOrder, setSelectedOrder] = useState(null)
   const [companySearch, setCompanySearch]   = useState('')
   const [companySuggestions, setCompanySuggestions] = useState([])
   const [showCompanyDrop, setShowCompanyDrop] = useState(false)
@@ -74,14 +87,14 @@ export default function Dashboard() {
     setLoading(true)
     setError('')
     try {
-      const data = await getOrders(filters, co !== undefined ? co : override)
+      const data = await getOrders(filters, co !== undefined ? co : override, year)
       if (data) setAllOrders(data.orders)
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [override])
+  }, [override, year])
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -115,6 +128,7 @@ export default function Dashboard() {
     if (activeTab === 'active')  return allOrders.filter(o => !o.shipped)
     if (activeTab === 'shipped') return allOrders.filter(o => o.shipped)
     if (activeTab === 'onhold')  return allOrders.filter(o => o.on_hold)
+    if (activeTab === 'overdue') return allOrders.filter(isOverdue)
     return allOrders
   }, [allOrders, activeTab])
 
@@ -122,6 +136,7 @@ export default function Dashboard() {
     if (id === 'active')  return allOrders.filter(o => !o.shipped).length
     if (id === 'shipped') return allOrders.filter(o => o.shipped).length
     if (id === 'onhold')  return allOrders.filter(o => o.on_hold).length
+    if (id === 'overdue') return allOrders.filter(isOverdue).length
     return allOrders.length
   }, [allOrders])
 
@@ -200,6 +215,20 @@ export default function Dashboard() {
             {/* Mobile: company name */}
             <p className="sm:hidden text-sm font-bold text-navy mr-1">{company}</p>
 
+            {/* Year selector */}
+            <div className="relative">
+              <select
+                value={year}
+                onChange={e => setYear(Number(e.target.value))}
+                aria-label="Order year"
+                className="text-xs font-semibold text-navy bg-white border border-slate-200 rounded-xl pl-3 pr-7 py-1.5 cursor-pointer appearance-none focus:outline-none focus:border-brand transition-colors"
+              >
+                {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
 
             {/* Refresh */}
             <button
@@ -410,10 +439,13 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <OrderTable orders={displayedOrders} loading={loading} error={error} tabKey={activeTab} />
+            <OrderTable orders={displayedOrders} loading={loading} error={error} tabKey={activeTab} onRowClick={setSelectedOrder} />
           </div>
         </main>
       </div>
+
+      {/* Order detail drawer */}
+      {selectedOrder && <OrderDetailDrawer order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
     </div>
   )
 }
