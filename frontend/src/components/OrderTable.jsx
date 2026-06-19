@@ -80,9 +80,14 @@ export const TABLE_COLS = [
   { key: 'customer',             label: 'Customer',      type: 'text'   },
 ]
 
-// Split the GROUP_CONCAT'd design string into a list.
+// Split the GROUP_CONCAT'd design string into [{ name, done }].
+// Each design is "name<US>doneFlag" (US = unit separator), designs joined by "||".
+const DESIGN_FS = String.fromCharCode(31)
 export function parseDesigns(value) {
-  return (value || '').split('||').map(s => s.trim()).filter(Boolean)
+  return (value || '').split('||').map(tok => {
+    const [name, done] = tok.split(DESIGN_FS)
+    return { name: (name || '').trim(), done: done !== undefined ? done.trim() === '1' : null }
+  }).filter(d => d.name)
 }
 
 function compareValues(a, b, type) {
@@ -157,9 +162,10 @@ function Cell({ col, row, showOverdue }) {
   if (col.type === 'design') {
     const list = parseDesigns(val)
     if (!list.length) return <span className="text-slate-300">—</span>
-    const first = list[0].length > 22 ? list[0].slice(0, 20) + '…' : list[0]
+    const name0 = list[0].name
+    const first = name0.length > 22 ? name0.slice(0, 20) + '…' : name0
     return (
-      <span title={list.join(', ')}>
+      <span title={list.map(d => d.name).join(', ')}>
         {first}
         {list.length > 1 && <span className="text-slate-400 font-medium"> +{list.length - 1}</span>}
       </span>
@@ -301,7 +307,7 @@ function MobileCard({ row, i, onClick, showOverdue }) {
       <div className="px-4 pt-3 pb-4 space-y-3">
         {/* Design name(s) — prominent */}
         {row.design_name && (
-          <p className="text-sm font-bold text-slate-800 leading-snug">{parseDesigns(row.design_name).join(', ')}</p>
+          <p className="text-sm font-bold text-slate-800 leading-snug">{parseDesigns(row.design_name).map(d => d.name).join(', ')}</p>
         )}
 
         {/* Info grid */}

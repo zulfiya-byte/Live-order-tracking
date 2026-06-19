@@ -234,7 +234,11 @@ SELECT
     TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) AS pxp_ae,
     o.CustomerPurchaseOrder                                                 AS purchase_order,
     o.ct_ContactNameFull                                                    AS order_contact,
-    GROUP_CONCAT(DISTINCT NULLIF(od.ct_DesignName,'') ORDER BY od.ct_DesignName SEPARATOR '||') AS design_name,
+    GROUP_CONCAT(DISTINCT
+        CASE WHEN od.ct_DesignName IS NOT NULL AND od.ct_DesignName != ''
+             THEN CONCAT(od.ct_DesignName, CHAR(31), CAST(COALESCE(od.sts_DesignDone,0) AS CHAR))
+        END
+        ORDER BY od.ct_DesignName SEPARATOR '||') AS design_name,
     o.date_OrderPlaced                                                      AS approx_po_date,
     o.date_OrderRequestedToShip                                             AS request_to_ship_date,
     (o.cn_sts_HoldOrderGraphic = '10')                                      AS on_hold,
