@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+
+const PAGE_SIZE = 20
 
 // Local date (YYYY-MM-DD) — used to flag orders past their requested ship date.
 export const TODAY = new Date().toISOString().slice(0, 10)
@@ -435,6 +437,7 @@ function SkeletonRows() {
 
 export default function OrderTable({ orders, loading, error, tabKey, onRowClick, showOverdue }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
+  const [page, setPage] = useState(1)
 
   function handleSort(colKey) {
     setSort(prev =>
@@ -454,6 +457,15 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick,
       return sort.dir === 'asc' ? cmp : -cmp
     })
   }, [orders, sort])
+
+  // Reset to the first page whenever the result set or sort changes.
+  useEffect(() => { setPage(1) }, [orders, sort])
+
+  const total      = sorted.length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages)
+  const pageStart  = (safePage - 1) * PAGE_SIZE
+  const paged      = sorted.slice(pageStart, pageStart + PAGE_SIZE)
 
   // ── Loading ────────────────────────────────────────────────────────────────
 
@@ -518,8 +530,8 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick,
       {/* ── Mobile card view (< md) ─────────────────────────────────────────── */}
       <div className="md:hidden flex-1 overflow-y-auto">
         <div className="p-3 flex flex-col gap-3">
-          {sorted.map((row, i) => (
-            <MobileCard key={`${row.order_number}-${i}`} row={row} i={i} onClick={() => onRowClick?.(row)} showOverdue={showOverdue} />
+          {paged.map((row, i) => (
+            <MobileCard key={row.order_number} row={row} i={i} onClick={() => onRowClick?.(row)} showOverdue={showOverdue} />
           ))}
         </div>
       </div>
@@ -556,10 +568,10 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick,
             </tr>
           </thead>
 
-          <tbody key={`${tabKey}-${sort.key}-${sort.dir}`}>
-            {sorted.map((row, i) => (
+          <tbody key={`${tabKey}-${sort.key}-${sort.dir}-${safePage}`}>
+            {paged.map((row, i) => (
               <tr
-                key={`${row.order_number}-${i}`}
+                key={row.order_number}
                 onClick={() => onRowClick?.(row)}
                 className={[row.on_hold ? 'on-hold-row' : '', 'border-b border-slate-100 transition-colors duration-100 cursor-pointer'].join(' ')}
                 style={row.on_hold ? { background: '#FFFBEB' } : { background: i % 2 === 0 ? '#fff' : '#F8FAFC' }}
@@ -582,6 +594,28 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick,
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Pagination footer ───────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 bg-white flex-shrink-0 text-xs print:hidden">
+        <span className="text-slate-500 font-medium tabular-nums">
+          {total === 0 ? '0' : `${pageStart + 1}–${Math.min(pageStart + PAGE_SIZE, total)}`} of {total}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="px-2.5 py-1 rounded-lg font-semibold border border-slate-200 text-slate-600 disabled:opacity-40 enabled:hover:bg-slate-50 transition">
+            Prev
+          </button>
+          <span className="px-2 text-slate-500 tabular-nums">Page {safePage} of {totalPages}</span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="px-2.5 py-1 rounded-lg font-semibold border border-slate-200 text-slate-600 disabled:opacity-40 enabled:hover:bg-slate-50 transition">
+            Next
+          </button>
+        </div>
       </div>
     </>
   )

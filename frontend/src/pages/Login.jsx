@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { login } from '../api'
 
 const FEATURES = [
@@ -173,7 +173,7 @@ export default function Login() {
               </button>
             </form>
             <p className="text-center text-xs text-slate-400 mt-4">
-              <a href="/forgot-password" className="text-brand hover:underline font-medium">Forgot your password?</a>
+              <Link to="/forgot-password" className="text-brand hover:underline font-medium">Forgot your password?</Link>
             </p>
           </div>
 
