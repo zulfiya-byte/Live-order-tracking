@@ -52,8 +52,8 @@ function LiveTracking({ orderNumber }) {
             const style = TRACK_STYLE[t.status] || TRACK_STYLE.unknown
             return (
               <div key={i} className="rounded-xl border border-slate-200 overflow-hidden">
-                <div className="flex items-center justify-between gap-2 px-3 py-2.5" style={{ background: style.bg }}>
-                  <div className="min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 px-3 py-2.5" style={{ background: style.bg }}>
+                  <div className="min-w-0 order-1">
                     <p className="text-sm font-bold leading-tight" style={{ color: style.color }}>
                       {t.error ? 'Not available yet' : (t.status_desc || 'In Transit')}
                     </p>
@@ -63,7 +63,7 @@ function LiveTracking({ orderNumber }) {
                       </p>
                     )}
                   </div>
-                  <span className="text-[10px] font-mono text-slate-500 flex-shrink-0">{t.tracking_number}</span>
+                  <span className="text-[10px] font-mono text-slate-500 sm:flex-shrink-0 order-2 break-all">{t.tracking_number}</span>
                 </div>
                 {t.events && t.events.length > 0 && (
                   <ul className="divide-y divide-slate-100">
