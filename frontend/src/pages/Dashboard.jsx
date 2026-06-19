@@ -231,9 +231,9 @@ export default function Dashboard() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Mobile: company name */}
-            <p className="sm:hidden text-sm font-bold text-navy mr-1">{company}</p>
+            <p className="sm:hidden text-sm font-bold text-navy mr-0.5 truncate max-w-[28vw]">{company}</p>
 
             {/* Year selector */}
             <div className="relative">
@@ -289,16 +289,17 @@ export default function Dashboard() {
             {admin && (
               <Link
                 to="/admin"
-                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors text-white"
+                aria-label="Admin"
+                className="flex items-center gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-xl transition-colors text-white"
                 style={{ background: '#0369A1' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#025A87'}
                 onMouseLeave={e => e.currentTarget.style.background = '#0369A1'}
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Admin
+                <span className="hidden sm:inline">Admin</span>
               </Link>
             )}
 
