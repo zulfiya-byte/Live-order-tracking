@@ -2,9 +2,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AdminPage from './pages/AdminPage'
+import MessagesInbox from './pages/MessagesInbox'
 import SetPassword from './pages/SetPassword'
 import ForgotPassword from './pages/ForgotPassword'
-import { isLoggedIn, isAdmin } from './api'
+import { isLoggedIn, isAdmin, isViewAllOrders } from './api'
 
 function Protected({ children }) {
   return isLoggedIn() ? children : <Navigate to="/login" replace />
@@ -16,6 +17,12 @@ function AdminOnly({ children }) {
   return children
 }
 
+function StaffOnly({ children }) {
+  if (!isLoggedIn()) return <Navigate to="/login" replace />
+  if (!isAdmin() && !isViewAllOrders()) return <Navigate to="/dashboard" replace />
+  return children
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -23,6 +30,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/admin" element={<AdminOnly><AdminPage /></AdminOnly>} />
+        <Route path="/messages" element={<StaffOnly><MessagesInbox /></StaffOnly>} />
         <Route path="/set-password" element={<SetPassword />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<Navigate to={isLoggedIn() ? '/dashboard' : '/login'} replace />} />

@@ -22,6 +22,7 @@ from auth import verify_token, require_admin, require_super_admin, check_passwor
 from email_utils import send_invite_email, send_reset_email, send_error_alert
 from cache import cache_get, cache_set, cache_bust, cache_info
 import ups
+import messages
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -131,6 +132,14 @@ def ensure_invite_schema():
             conn.close()
         except Exception:
             pass
+
+@app.on_event("startup")
+def init_messages_db():
+    try:
+        messages.init_db()
+    except Exception as exc:
+        log.warning(f"messages init failed: {exc}")
+
 
 @app.on_event("startup")
 def warm_order_cache():
@@ -585,6 +594,121 @@ def order_tracking(order_number: int, user: dict = Depends(verify_token)):
     ups_numbers = [n for n in numbers if n.upper().startswith("1Z")]
     results = [_tracking_for(n) for n in ups_numbers]
     return {"tracking": results, "configured": ups.is_configured()}
+
+
+# ── Messaging (client <-> AE) ─────────────────────────────────────────────────
+
+class SendMessageRequest(BaseModel):
+    body: str
+    order_number: Optional[int] = None
+
+
+class ReplyRequest(BaseModel):
+    body: str
+
+
+def _is_staff(user: dict) -> bool:
+    return bool(user.get("is_super_admin") or user.get("is_admin") or user.get("view_all_orders"))
+
+
+def _staff_scope(user: dict):
+    """Returns (all_companies: bool, companies: list) the staff member can see."""
+    if user.get("is_super_admin"):
+        return True, []
+    companies = set()
+    if user.get("is_admin") and user.get("company_name"):
+        companies.add(user["company_name"])
+    if user.get("view_all_orders"):
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT company_name FROM local_reference.client_company_access WHERE client_id=%s",
+                            (user["client_id"],))
+                companies.update(r["company_name"] for r in cur.fetchall())
+        finally:
+            conn.close()
+    return False, list(companies)
+
+
+@app.post("/api/messages", status_code=201)
+def send_message(body: SendMessageRequest, user: dict = Depends(verify_token)):
+    text = (body.body or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    if len(text) > 4000:
+        text = text[:4000]
+    mid = messages.add_message(
+        client_id=user["client_id"], company=user.get("company_name"),
+        sender_type="client", sender_name=user["sub"],
+        body=text, order_number=body.order_number,
+    )
+    log.info(f"Message from {user['sub']} ({user.get('company_name')})")
+    return {"id": mid}
+
+
+@app.get("/api/messages/mine")
+def my_messages(user: dict = Depends(verify_token)):
+    thread = messages.get_thread(user["client_id"])
+    messages.mark_read(user["client_id"], "client")
+    return {"messages": thread}
+
+
+@app.get("/api/messages/unread")
+def messages_unread(user: dict = Depends(verify_token)):
+    if _is_staff(user):
+        all_co, companies = _staff_scope(user)
+        return {"unread": messages.staff_unread_count(all_companies=all_co, companies=companies), "role": "staff"}
+    # client: count unread staff replies
+    thread = messages.get_thread(user["client_id"])
+    n = sum(1 for m in thread if m["sender_type"] == "staff" and not m["read_client"])
+    return {"unread": n, "role": "client"}
+
+
+@app.get("/api/messages/inbox")
+def messages_inbox(user: dict = Depends(verify_token)):
+    if not _is_staff(user):
+        raise HTTPException(status_code=403, detail="Staff access required")
+    all_co, companies = _staff_scope(user)
+    return {"conversations": messages.inbox(all_companies=all_co, companies=companies)}
+
+
+def _staff_may_see_client(user: dict, client_id: int) -> bool:
+    thread = messages.get_thread(client_id)
+    if not thread:
+        return False
+    if user.get("is_super_admin"):
+        return True
+    all_co, companies = _staff_scope(user)
+    company = thread[0].get("company")
+    return all_co or company in companies
+
+
+@app.get("/api/messages/thread/{client_id}")
+def messages_thread(client_id: int, user: dict = Depends(verify_token)):
+    if not _is_staff(user):
+        raise HTTPException(status_code=403, detail="Staff access required")
+    if not _staff_may_see_client(user, client_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    thread = messages.get_thread(client_id)
+    messages.mark_read(client_id, "staff")
+    return {"messages": thread}
+
+
+@app.post("/api/messages/thread/{client_id}/reply", status_code=201)
+def reply_message(client_id: int, body: ReplyRequest, user: dict = Depends(verify_token)):
+    if not _is_staff(user):
+        raise HTTPException(status_code=403, detail="Staff access required")
+    if not _staff_may_see_client(user, client_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    text = (body.body or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Reply cannot be empty")
+    company = messages.get_thread(client_id)[0].get("company")
+    mid = messages.add_message(
+        client_id=client_id, company=company,
+        sender_type="staff", sender_name=user["sub"], body=text[:4000],
+    )
+    return {"id": mid}
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────

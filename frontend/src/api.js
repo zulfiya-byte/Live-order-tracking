@@ -78,6 +78,32 @@ export async function getOrderTracking(orderNumber) {
   return apiFetch(`/api/orders/${orderNumber}/tracking`)
 }
 
+// ── Messaging ───────────────────────────────────────────────────────────────
+
+export async function sendMessage(body, order_number = null) {
+  return apiFetch('/api/messages', { method: 'POST', body: JSON.stringify({ body, order_number }) })
+}
+
+export async function getMyMessages() {
+  return apiFetch('/api/messages/mine')
+}
+
+export async function getMessagesUnread() {
+  return apiFetch('/api/messages/unread')
+}
+
+export async function getInbox() {
+  return apiFetch('/api/messages/inbox')
+}
+
+export async function getThread(clientId) {
+  return apiFetch(`/api/messages/thread/${clientId}`)
+}
+
+export async function replyToThread(clientId, body) {
+  return apiFetch(`/api/messages/thread/${clientId}/reply`, { method: 'POST', body: JSON.stringify({ body }) })
+}
+
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export async function adminGetClients() {

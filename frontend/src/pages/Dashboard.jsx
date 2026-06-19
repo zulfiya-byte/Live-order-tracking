@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { getOrders, getFilters, logout, isAdmin, isSuperAdmin, isViewAllOrders, adminGetCompanies } from '../api'
+import { getOrders, getFilters, logout, isAdmin, isSuperAdmin, isViewAllOrders, adminGetCompanies, getMessagesUnread } from '../api'
 import Sidebar from '../components/Sidebar'
 import OrderTable, { COLS, isOverdue, parseDesigns } from '../components/OrderTable'
 import OrderDetailDrawer from '../components/OrderDetailDrawer'
 import StatsBar from '../components/StatsBar'
+import ChatWidget from '../components/ChatWidget'
 
 const TABS = [
   { id: 'all',     label: 'All Orders',  count_key: 'all',     color: '#0369A1' },
@@ -66,6 +67,18 @@ export default function Dashboard() {
   )
   const [year, setYear] = useState(CURRENT_YEAR)
   const [selectedOrder, setSelectedOrder] = useState(null)
+
+  const staff = admin || superAdmin || viewAllOrders
+  const [msgUnread, setMsgUnread] = useState(0)
+
+  useEffect(() => {
+    if (!staff) return
+    let active = true
+    const check = () => getMessagesUnread().then(d => { if (active) setMsgUnread(d?.unread || 0) }).catch(() => {})
+    check()
+    const id = setInterval(check, 60000)
+    return () => { active = false; clearInterval(id) }
+  }, [staff])
   const [companySearch, setCompanySearch]   = useState('')
   const [companySuggestions, setCompanySuggestions] = useState([])
   const [showCompanyDrop, setShowCompanyDrop] = useState(false)
@@ -250,6 +263,26 @@ export default function Dashboard() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
+
+            {staff && (
+              <Link
+                to="/messages"
+                className="relative flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors border"
+                style={{ borderColor: '#CBD5E1', color: '#64748B' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#29ABE2'; e.currentTarget.style.color = '#0369A1' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.color = '#64748B' }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-9 7l4-4h10a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12z" />
+                </svg>
+                <span className="hidden sm:inline">Messages</span>
+                {msgUnread > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {msgUnread}
+                  </span>
+                )}
+              </Link>
+            )}
 
             {admin && (
               <Link
@@ -442,6 +475,9 @@ export default function Dashboard() {
 
       {/* Order detail drawer */}
       {selectedOrder && <OrderDetailDrawer order={selectedOrder} onClose={() => setSelectedOrder(null)} showOverdue={superAdmin} />}
+
+      {/* Client help + AE chat widget (clients only; staff use the Messages inbox) */}
+      {!staff && <ChatWidget orders={allOrders} />}
     </div>
   )
 }
