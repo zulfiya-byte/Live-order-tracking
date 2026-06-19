@@ -608,7 +608,9 @@ class ReplyRequest(BaseModel):
 
 
 def _is_staff(user: dict) -> bool:
-    return bool(user.get("is_super_admin") or user.get("is_admin") or user.get("view_all_orders"))
+    # Only PXP-side users (super admins and Internal PXP Staff/AEs) handle the
+    # inbox. Company admins are customers and use the client chat instead.
+    return bool(user.get("is_super_admin") or user.get("view_all_orders"))
 
 
 def _staff_scope(user: dict):
@@ -616,8 +618,6 @@ def _staff_scope(user: dict):
     if user.get("is_super_admin"):
         return True, []
     companies = set()
-    if user.get("is_admin") and user.get("company_name"):
-        companies.add(user["company_name"])
     if user.get("view_all_orders"):
         conn = get_conn()
         try:

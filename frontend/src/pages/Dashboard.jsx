@@ -68,17 +68,19 @@ export default function Dashboard() {
   const [year, setYear] = useState(CURRENT_YEAR)
   const [selectedOrder, setSelectedOrder] = useState(null)
 
-  const staff = admin || superAdmin || viewAllOrders
+  // PXP-side users (super admins + Internal PXP Staff/AEs) get the Messages
+  // inbox. Company admins are customers, so they get the chat widget instead.
+  const pxpStaff = superAdmin || viewAllOrders
   const [msgUnread, setMsgUnread] = useState(0)
 
   useEffect(() => {
-    if (!staff) return
+    if (!pxpStaff) return
     let active = true
     const check = () => getMessagesUnread().then(d => { if (active) setMsgUnread(d?.unread || 0) }).catch(() => {})
     check()
     const id = setInterval(check, 60000)
     return () => { active = false; clearInterval(id) }
-  }, [staff])
+  }, [pxpStaff])
   const [companySearch, setCompanySearch]   = useState('')
   const [companySuggestions, setCompanySuggestions] = useState([])
   const [showCompanyDrop, setShowCompanyDrop] = useState(false)
@@ -264,7 +266,7 @@ export default function Dashboard() {
               </svg>
             </button>
 
-            {staff && (
+            {pxpStaff && (
               <Link
                 to="/messages"
                 className="relative flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors border"
@@ -476,8 +478,8 @@ export default function Dashboard() {
       {/* Order detail drawer */}
       {selectedOrder && <OrderDetailDrawer order={selectedOrder} onClose={() => setSelectedOrder(null)} showOverdue={superAdmin} />}
 
-      {/* Client help + AE chat widget (clients only; staff use the Messages inbox) */}
-      {!staff && <ChatWidget orders={allOrders} />}
+      {/* Client help + AE chat widget (clients & company admins; PXP staff use the inbox) */}
+      {!pxpStaff && <ChatWidget orders={allOrders} />}
     </div>
   )
 }

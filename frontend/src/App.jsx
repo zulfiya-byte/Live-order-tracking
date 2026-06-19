@@ -5,7 +5,7 @@ import AdminPage from './pages/AdminPage'
 import MessagesInbox from './pages/MessagesInbox'
 import SetPassword from './pages/SetPassword'
 import ForgotPassword from './pages/ForgotPassword'
-import { isLoggedIn, isAdmin, isViewAllOrders } from './api'
+import { isLoggedIn, isAdmin, isSuperAdmin, isViewAllOrders } from './api'
 
 function Protected({ children }) {
   return isLoggedIn() ? children : <Navigate to="/login" replace />
@@ -19,7 +19,8 @@ function AdminOnly({ children }) {
 
 function StaffOnly({ children }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />
-  if (!isAdmin() && !isViewAllOrders()) return <Navigate to="/dashboard" replace />
+  // PXP-side only (super admins + Internal PXP Staff). Company admins are customers.
+  if (!isSuperAdmin() && !isViewAllOrders()) return <Navigate to="/dashboard" replace />
   return children
 }
 
