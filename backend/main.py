@@ -2,6 +2,7 @@ import os
 import time
 import secrets
 import logging
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -130,6 +131,66 @@ def ensure_invite_schema():
         except Exception:
             pass
 
+@app.on_event("startup")
+def warm_order_cache():
+    def _run():
+        time.sleep(4)  # wait for server and DB connections to settle
+        year = datetime.now().year
+        # Warm the ALL-companies cache (super admins + view_all_orders users)
+        try:
+            conn = get_conn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        _ORDERS_SQL_ALL + _ORDERS_GROUP_BY +
+                        " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 3000"
+                    )
+                    rows = _serialize_rows(cur.fetchall())
+                cache_set(f"orders:ALL:{year}", rows)
+                log.info(f"Cache warm: ALL ({len(rows)} rows)")
+            finally:
+                conn.close()
+        except Exception as exc:
+            log.warning(f"Cache warm ALL failed: {exc}")
+
+        # Warm per-company caches for regular clients
+        try:
+            conn = get_conn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT DISTINCT company_name FROM local_reference.clients "
+                        "WHERE company_name IS NOT NULL AND company_name != '' "
+                        "AND is_super_admin = 0 AND view_all_orders = 0"
+                    )
+                    companies = [r["company_name"] for r in cur.fetchall()]
+            finally:
+                conn.close()
+
+            for company in companies:
+                time.sleep(0.25)
+                try:
+                    conn = get_conn()
+                    try:
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                _ORDERS_SQL + _ORDERS_GROUP_BY +
+                                " ORDER BY o.date_OrderRequestedToShip DESC LIMIT 1000",
+                                [company],
+                            )
+                            rows = _serialize_rows(cur.fetchall())
+                        cache_set(f"orders:{company}:{year}", rows)
+                        log.info(f"Cache warm: {company} ({len(rows)} rows)")
+                    finally:
+                        conn.close()
+                except Exception as exc:
+                    log.warning(f"Cache warm {company} failed: {exc}")
+        except Exception as exc:
+            log.warning(f"Cache warm companies failed: {exc}")
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
@@ -205,7 +266,7 @@ LEFT JOIN shopworks.manifest m
     AND (m.deleted != 1 OR m.deleted IS NULL)
     AND m.ShipMethod IS NOT NULL AND m.ShipMethod != ''
 LEFT JOIN shopworks.pack_import pi
-    ON CAST(pi.id_Order AS UNSIGNED) = o.ID_Order
+    ON pi.id_Order = CAST(o.ID_Order AS CHAR)
     AND (pi.deleted != 1 OR pi.deleted IS NULL)
     AND pi.TrackingNumber IS NOT NULL AND pi.TrackingNumber != ''
 """
