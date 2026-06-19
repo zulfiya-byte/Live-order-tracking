@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { getOrders, getFilters, logout, isAdmin, isSuperAdmin, adminGetCompanies } from '../api'
+import { getOrders, getFilters, logout, isAdmin, isSuperAdmin, isViewAllOrders, adminGetCompanies } from '../api'
 import Sidebar from '../components/Sidebar'
 import OrderTable, { COLS } from '../components/OrderTable'
 import StatsBar from '../components/StatsBar'
@@ -48,9 +48,10 @@ export default function Dashboard() {
   const ownCompany = localStorage.getItem('pxp_company') || ''
   const admin      = isAdmin()
   const superAdmin = isSuperAdmin()
+  const viewAllOrders = isViewAllOrders()
 
-  // Super admins default to '' = all companies; regular users always see their own
-  const [viewingCompany, setViewingCompany] = useState(superAdmin ? '' : ownCompany)
+  // Super admins and viewAllOrders users default to '' = all companies; regular users always see their own
+  const [viewingCompany, setViewingCompany] = useState(superAdmin || viewAllOrders ? '' : ownCompany)
   const [companySearch, setCompanySearch]   = useState('')
   const [companySuggestions, setCompanySuggestions] = useState([])
   const [showCompanyDrop, setShowCompanyDrop] = useState(false)
@@ -255,7 +256,7 @@ export default function Dashboard() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Sidebar — desktop only */}
-        <div className="print:hidden flex-shrink-0 hidden lg:block">
+        <div className="print:hidden flex-shrink-0 hidden lg:block h-full">
           <Sidebar
             orderTypes={orderTypes}
             suggestions={suggestions}
@@ -274,7 +275,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold text-navy">
                 {greeting()},{' '}
-                <span style={{ color: '#0369A1' }}>{superAdmin ? 'PXP Admin' : (company || 'there')}</span>
+                <span style={{ color: '#0369A1' }}>{superAdmin ? 'PXP Admin' : viewAllOrders ? 'PXP Sales' : (company || 'there')}</span>
                 <span className="text-slate-400 font-normal text-xs ml-2 hidden sm:inline">
                   {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </span>

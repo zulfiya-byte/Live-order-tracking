@@ -90,6 +90,14 @@
            flex items-center gap-3 transition-all duration-200 cursor-default;
     box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
   }
+
+  .filter-input {
+    @apply w-full bg-transparent text-sm text-slate-700
+           placeholder:text-slate-300 focus:outline-none
+           border-0 p-0 leading-snug;
+  }
+  .filter-input:focus { box-shadow: none; }
+  select.filter-input { @apply cursor-pointer; }
 }
 
 @media (prefers-reduced-motion: reduce) {

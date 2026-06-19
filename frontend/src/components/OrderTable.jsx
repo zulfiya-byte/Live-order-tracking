@@ -1,5 +1,41 @@
 import { useState, useMemo } from 'react'
 
+function trackingUrl(num) {
+  const n = num.trim()
+  if (/^1Z/i.test(n))          return `https://www.ups.com/track?tracknum=${n}`
+  if (/^\d{12,22}$/.test(n))   return `https://www.fedex.com/apps/fedextrack/?tracknums=${n}`
+  if (/^9\d{21}$/.test(n))     return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`
+  return null
+}
+
+function TrackingLinks({ value, className = '' }) {
+  if (!value) return <span className="text-slate-300">—</span>
+  const nums = value.split(',').map(s => s.trim()).filter(Boolean)
+  return (
+    <div className={`flex flex-col gap-0.5 ${className}`}>
+      {nums.map((n, i) => {
+        const url = trackingUrl(n)
+        const display = n.length > 20 ? n.slice(0, 18) + '…' : n
+        return url ? (
+          <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-mono text-xs tabular-nums transition-colors"
+            style={{ color: '#1D4ED8' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#1E40AF'}
+            onMouseLeave={e => e.currentTarget.style.color = '#1D4ED8'}
+            title={n}>
+            {display}
+            <svg className="w-2.5 h-2.5 flex-shrink-0 opacity-50" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        ) : (
+          <span key={i} className="font-mono text-xs text-slate-600 tabular-nums" title={n}>{display}</span>
+        )
+      })}
+    </div>
+  )
+}
+
 export const COLS = [
   { key: 'product_quantity',     label: 'Qty',            type: 'num'  },
   { key: 'order_number',         label: 'Order #',        type: 'num'  },
@@ -83,12 +119,8 @@ function Cell({ col, row }) {
 
   if (val == null || val === '') return <span className="text-slate-300">—</span>
 
-  if (col.type === 'track' && typeof val === 'string') {
-    return (
-      <span className="font-mono text-xs text-blue-600 tabular-nums" title={val}>
-        {val.length > 20 ? val.slice(0, 18) + '…' : val}
-      </span>
-    )
+  if (col.type === 'track') {
+    return <TrackingLinks value={val} />
   }
 
   if (col.type === 'num') {
@@ -253,13 +285,11 @@ function MobileCard({ row, i }) {
               </div>
             )}
             {row.tracking_number && (
-              <div className="flex items-center gap-2">
-                <svg className="w-3.5 h-3.5 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <div className="flex items-start gap-2">
+                <svg className="w-3.5 h-3.5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
                 </svg>
-                <span className="text-xs font-semibold text-green-800 font-mono tabular-nums break-all">
-                  {row.tracking_number}
-                </span>
+                <TrackingLinks value={row.tracking_number} className="flex-1" />
               </div>
             )}
           </div>

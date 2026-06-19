@@ -23,6 +23,7 @@ export async function login(email, password) {
   localStorage.setItem('pxp_company', data.company_name)
   localStorage.setItem('pxp_is_admin', data.is_admin ? '1' : '')
   localStorage.setItem('pxp_is_super_admin', data.is_super_admin ? '1' : '')
+  localStorage.setItem('pxp_view_all_orders', data.view_all_orders ? '1' : '')
   return data
 }
 
@@ -31,6 +32,7 @@ export function logout() {
   localStorage.removeItem('pxp_company')
   localStorage.removeItem('pxp_is_admin')
   localStorage.removeItem('pxp_is_super_admin')
+  localStorage.removeItem('pxp_view_all_orders')
 }
 
 export function isLoggedIn() {
@@ -43,6 +45,10 @@ export function isAdmin() {
 
 export function isSuperAdmin() {
   return localStorage.getItem('pxp_is_super_admin') === '1'
+}
+
+export function isViewAllOrders() {
+  return localStorage.getItem('pxp_view_all_orders') === '1'
 }
 
 async function apiFetch(path, opts = {}) {
@@ -147,4 +153,37 @@ export async function adminBustCache() {
 
 export async function adminGetCacheInfo() {
   return apiFetch('/api/admin/cache')
+}
+
+export async function adminGetAeAccess(clientId) {
+  return apiFetch(`/api/admin/clients/${clientId}/ae-access`)
+}
+
+export async function adminAddAeAccess(clientId, ae_name) {
+  return apiFetch(`/api/admin/clients/${clientId}/ae-access`, {
+    method: 'POST',
+    body: JSON.stringify({ ae_name }),
+  })
+}
+
+export async function adminRemoveAeAccess(mappingId) {
+  return apiFetch(`/api/admin/ae-access/${mappingId}`, { method: 'DELETE' })
+}
+
+export async function adminSuggestAes(q = '') {
+  return apiFetch(`/api/admin/suggest-aes?q=${encodeURIComponent(q)}`)
+}
+
+export async function adminGetCompanyAccess(clientId) {
+  return apiFetch(`/api/admin/clients/${clientId}/company-access`)
+}
+
+export async function adminAddCompanyAccess(clientId, company_name) {
+  return apiFetch(`/api/admin/clients/${clientId}/company-access`, {
+    method: 'POST', body: JSON.stringify({ company_name }),
+  })
+}
+
+export async function adminRemoveCompanyAccess(mappingId) {
+  return apiFetch(`/api/admin/company-access/${mappingId}`, { method: 'DELETE' })
 }

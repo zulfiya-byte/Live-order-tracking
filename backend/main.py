@@ -90,6 +90,23 @@ def ensure_invite_schema():
                 "ALTER TABLE local_reference.clients ADD COLUMN invite_token VARCHAR(100) NULL",
                 "ALTER TABLE local_reference.clients ADD COLUMN invite_expires_at DATETIME NULL",
                 "ALTER TABLE local_reference.clients ADD COLUMN is_super_admin TINYINT(1) NOT NULL DEFAULT 0",
+                "ALTER TABLE local_reference.clients ADD COLUMN view_all_orders TINYINT(1) NOT NULL DEFAULT 0",
+                """CREATE TABLE IF NOT EXISTS local_reference.client_ae_access (
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  client_id INT NOT NULL,
+                  ae_name VARCHAR(255) NOT NULL,
+                  created_at DATETIME DEFAULT NOW(),
+                  UNIQUE KEY uq_client_ae (client_id, ae_name),
+                  KEY idx_client_id (client_id)
+                )""",
+                """CREATE TABLE IF NOT EXISTS local_reference.client_company_access (
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  client_id INT NOT NULL,
+                  company_name VARCHAR(500) NOT NULL,
+                  created_at DATETIME DEFAULT NOW(),
+                  UNIQUE KEY uq_client_company (client_id, company_name),
+                  KEY idx_client_id (client_id)
+                )""",
             ]:
                 try:
                     cur.execute(sql)
@@ -127,7 +144,7 @@ def login(request: Request, body: LoginRequest):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, email, password_hash, company_name, is_admin, is_super_admin FROM local_reference.clients WHERE email = %s",
+                "SELECT id, email, password_hash, company_name, is_admin, is_super_admin, view_all_orders FROM local_reference.clients WHERE email = %s",
                 (body.email,),
             )
             row = cur.fetchone()
@@ -144,9 +161,10 @@ def login(request: Request, body: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     is_super = bool(row.get("is_super_admin"))
-    token = make_token(row["email"], row["id"], row["company_name"], bool(row["is_admin"]), is_super_admin=is_super)
+    view_all_orders = bool(row.get("view_all_orders"))
+    token = make_token(row["email"], row["id"], row["company_name"], bool(row["is_admin"]), is_super_admin=is_super, view_all_orders=view_all_orders)
     log.info(f"Login: {row['email']} ({row['company_name']})")
-    return {"token": token, "company_name": row["company_name"], "is_admin": bool(row["is_admin"]), "is_super_admin": is_super}
+    return {"token": token, "company_name": row["company_name"], "is_admin": bool(row["is_admin"]), "is_super_admin": is_super, "view_all_orders": view_all_orders}
 
 
 # ── Orders ────────────────────────────────────────────────────────────────────
@@ -170,7 +188,7 @@ SELECT
     (o.sts_Shipped = 1)                                                     AS shipped,
     o.date_OrderShipped                                                     AS ship_date,
     GROUP_CONCAT(DISTINCT m.ShipMethod ORDER BY m.ShipMethod SEPARATOR ', ') AS carrier,
-    GROUP_CONCAT(DISTINCT ml.TrackingNumber ORDER BY ml.TrackingNumber SEPARATOR ', ') AS tracking_number,
+    GROUP_CONCAT(DISTINCT pi.TrackingNumber ORDER BY pi.TrackingNumber SEPARATOR ', ') AS tracking_number,
     o.NotesToWebCustomer                                                    AS notes_to_customer,
     o.CompanyName                                                           AS customer
 FROM shopworks.orders o
@@ -184,10 +202,12 @@ LEFT JOIN local_reference.order_type ot
     ON CAST(ot.id AS UNSIGNED) = o.id_OrderType
 LEFT JOIN shopworks.manifest m
     ON m.id_Order = o.ID_Order
+    AND (m.deleted != 1 OR m.deleted IS NULL)
     AND m.ShipMethod IS NOT NULL AND m.ShipMethod != ''
-LEFT JOIN shopworks.manifest_lines ml
-    ON ml.id_Manifest = m.ID_Manifest
-    AND ml.TrackingNumber IS NOT NULL AND ml.TrackingNumber != ''
+LEFT JOIN shopworks.pack_import pi
+    ON CAST(pi.id_Order AS UNSIGNED) = o.ID_Order
+    AND (pi.deleted != 1 OR pi.deleted IS NULL)
+    AND pi.TrackingNumber IS NOT NULL AND pi.TrackingNumber != ''
 """
 
 # Used when a specific company must be shown
@@ -210,13 +230,23 @@ _DATE_COLS = ("request_to_ship_date", "approx_po_date", "ship_date")
 _BOOL_COLS = ("on_hold", "art_complete", "purchased", "received_garments", "shipped")
 
 
-def _build_filter_clause(params: dict, contact_emails: list = None) -> tuple:
+def _build_filter_clause(params: dict, contact_emails: list = None, ae_names: list = None, company_names: list = None) -> tuple:
     clauses, args = [], []
 
     if contact_emails:
         placeholders = ','.join(['%s'] * len(contact_emails))
         clauses.append(f"AND o.ct_ContactNameFull IN ({placeholders})")
         args.extend(contact_emails)
+
+    if ae_names:
+        placeholders = ','.join(['%s'] * len(ae_names))
+        clauses.append(f"AND TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) IN ({placeholders})")
+        args.extend(ae_names)
+
+    if company_names:
+        placeholders = ','.join(['%s'] * len(company_names))
+        clauses.append(f"AND o.CompanyName IN ({placeholders})")
+        args.extend(company_names)
 
     if params.get("order_number"):
         try:
@@ -282,8 +312,8 @@ def get_orders(
     user: dict = Depends(verify_token),
 ):
     is_super = user.get("is_super_admin")
-    # Super admin with no override = view all companies
-    view_all = is_super and not company_override
+    view_all_orders_flag = bool(user.get("view_all_orders"))
+    view_all = (is_super and not company_override) or view_all_orders_flag
     company = (company_override if is_super and company_override else None) or user["company_name"]
     client_id = user["client_id"]
 
@@ -296,12 +326,22 @@ def get_orders(
         with conn.cursor() as cur:
             if is_super:
                 contact_emails = []
+                ae_names = []
+                company_names = []
+            elif view_all_orders_flag:
+                contact_emails = []
+                cur.execute("SELECT ae_name FROM local_reference.client_ae_access WHERE client_id = %s", (client_id,))
+                ae_names = [r["ae_name"] for r in cur.fetchall()]
+                cur.execute("SELECT company_name FROM local_reference.client_company_access WHERE client_id = %s", (client_id,))
+                company_names = [r["company_name"] for r in cur.fetchall()]
             else:
                 cur.execute(
                     "SELECT contact_name FROM local_reference.client_contacts WHERE client_id = %s",
                     (client_id,),
                 )
                 contact_emails = [r["contact_name"] for r in cur.fetchall()]
+                ae_names = []
+                company_names = []
 
             extra_sql, extra_args = _build_filter_clause({
                 "order_number": order_number,
@@ -312,10 +352,11 @@ def get_orders(
                 "ship_date_from": ship_date_from,
                 "ship_date_to": ship_date_to,
                 "shipped": shipped,
-            }, contact_emails)
+            }, contact_emails, ae_names, company_names)
 
-            # Use cache only for unfiltered requests
-            if no_filters:
+            # Only use cache when there are no filters AND no AE/company restrictions
+            use_cache = no_filters and not ae_names and not company_names
+            if use_cache:
                 cached = cache_get(cache_key)
                 if cached is not None:
                     log.info(f"Cache hit: {cache_key}")
@@ -332,7 +373,7 @@ def get_orders(
         conn.close()
 
     rows = _serialize_rows(rows)
-    if no_filters:
+    if use_cache:
         cache_set(cache_key, rows)
         log.info(f"Cache set: {cache_key} ({len(rows)} rows)")
     return {"orders": rows, "count": len(rows), "cached": False}
@@ -343,7 +384,8 @@ def get_orders(
 @app.get("/api/filters")
 def get_filters(company_override: str = None, user: dict = Depends(verify_token)):
     is_super = user.get("is_super_admin")
-    view_all = is_super and not company_override
+    view_all_orders_flag = bool(user.get("view_all_orders"))
+    view_all = (is_super and not company_override) or view_all_orders_flag
     company = (company_override if is_super and company_override else None) or user["company_name"]
     conn = get_conn()
     try:
@@ -395,6 +437,7 @@ class UpdateClientRequest(BaseModel):
     company_name: Optional[str] = None
     is_admin: Optional[bool] = None
     is_super_admin: Optional[bool] = None
+    view_all_orders: Optional[bool] = None
 
 
 class AddContactRequest(BaseModel):
@@ -402,7 +445,7 @@ class AddContactRequest(BaseModel):
 
 
 _CLIENTS_SELECT = """
-    SELECT c.id, c.email, c.company_name, c.is_admin, c.is_super_admin,
+    SELECT c.id, c.email, c.company_name, c.is_admin, c.is_super_admin, c.view_all_orders,
            COUNT(cc.id) AS contact_count,
            CASE
              WHEN c.password_hash IS NOT NULL THEN 'active'
@@ -413,7 +456,7 @@ _CLIENTS_SELECT = """
     LEFT JOIN local_reference.client_contacts cc ON cc.client_id = c.id
 """
 _CLIENTS_GROUP = """
-    GROUP BY c.id, c.email, c.company_name, c.is_admin, c.password_hash, c.invite_token, c.invite_expires_at
+    GROUP BY c.id, c.email, c.company_name, c.is_admin, c.is_super_admin, c.view_all_orders, c.password_hash, c.invite_token, c.invite_expires_at
     ORDER BY c.company_name, c.email
 """
 
@@ -431,6 +474,7 @@ def admin_list_clients(user: dict = Depends(require_admin)):
             for c in clients:
                 c["is_admin"] = bool(c["is_admin"])
                 c["is_super_admin"] = bool(c["is_super_admin"])
+                c["view_all_orders"] = bool(c["view_all_orders"])
             return {"clients": clients}
     finally:
         conn.close()
@@ -595,6 +639,10 @@ def admin_update_client(client_id: int, body: UpdateClientRequest, user: dict = 
         fields.append("is_super_admin = %s"); args.append(int(body.is_super_admin))
         if body.is_super_admin:
             fields.append("is_admin = %s"); args.append(1)
+    if body.view_all_orders is not None:
+        if not is_super:
+            raise HTTPException(status_code=403, detail="Only PXP admins can set view all orders")
+        fields.append("view_all_orders = %s"); args.append(int(body.view_all_orders))
 
     if not fields:
         raise HTTPException(status_code=400, detail="Nothing to update")
@@ -729,6 +777,157 @@ def suggest_contacts(company: str, q: str = "", user: dict = Depends(require_adm
                 (company, f"%{q}%"),
             )
             return {"contacts": [r["contact_name"] for r in cur.fetchall()]}
+    finally:
+        conn.close()
+
+
+@app.get("/api/admin/clients/{client_id}/ae-access")
+def admin_list_ae_access(client_id: int, user: dict = Depends(require_admin)):
+    _assert_client_company(client_id, user)
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, ae_name, created_at FROM local_reference.client_ae_access WHERE client_id = %s ORDER BY ae_name",
+                (client_id,),
+            )
+            rows = cur.fetchall()
+            for r in rows:
+                if r.get("created_at"): r["created_at"] = str(r["created_at"])
+            return {"ae_access": rows}
+    finally:
+        conn.close()
+
+
+class AddAeAccessRequest(BaseModel):
+    ae_name: str
+
+
+@app.post("/api/admin/clients/{client_id}/ae-access", status_code=201)
+def admin_add_ae_access(client_id: int, body: AddAeAccessRequest, user: dict = Depends(require_admin)):
+    _assert_client_company(client_id, user)
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    "INSERT INTO local_reference.client_ae_access (client_id, ae_name) VALUES (%s, %s)",
+                    (client_id, body.ae_name.strip()),
+                )
+                conn.commit()
+                cache_bust()
+                return {"id": cur.lastrowid}
+            except Exception as e:
+                if "Duplicate entry" in str(e):
+                    raise HTTPException(status_code=409, detail="AE already mapped")
+                raise
+    finally:
+        conn.close()
+
+
+@app.delete("/api/admin/ae-access/{mapping_id}")
+def admin_remove_ae_access(mapping_id: int, user: dict = Depends(require_admin)):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if not user.get("is_super_admin"):
+                cur.execute("""
+                    SELECT caa.id FROM local_reference.client_ae_access caa
+                    JOIN local_reference.clients c ON c.id = caa.client_id
+                    WHERE caa.id = %s AND c.company_name = %s
+                """, (mapping_id, user["company_name"]))
+                if not cur.fetchone():
+                    raise HTTPException(status_code=403, detail="Access denied")
+            cur.execute("DELETE FROM local_reference.client_ae_access WHERE id = %s", (mapping_id,))
+            conn.commit()
+            cache_bust()
+            return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.get("/api/admin/clients/{client_id}/company-access")
+def admin_list_company_access(client_id: int, user: dict = Depends(require_admin)):
+    _assert_client_company(client_id, user)
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, company_name, created_at FROM local_reference.client_company_access WHERE client_id = %s ORDER BY company_name",
+                (client_id,),
+            )
+            rows = cur.fetchall()
+            for r in rows:
+                if r.get("created_at"): r["created_at"] = str(r["created_at"])
+            return {"company_access": rows}
+    finally:
+        conn.close()
+
+
+class AddCompanyAccessRequest(BaseModel):
+    company_name: str
+
+
+@app.post("/api/admin/clients/{client_id}/company-access", status_code=201)
+def admin_add_company_access(client_id: int, body: AddCompanyAccessRequest, user: dict = Depends(require_admin)):
+    _assert_client_company(client_id, user)
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    "INSERT INTO local_reference.client_company_access (client_id, company_name) VALUES (%s, %s)",
+                    (client_id, body.company_name.strip()),
+                )
+                conn.commit()
+                cache_bust()
+                return {"id": cur.lastrowid}
+            except Exception as e:
+                if "Duplicate entry" in str(e):
+                    raise HTTPException(status_code=409, detail="Company already mapped")
+                raise
+    finally:
+        conn.close()
+
+
+@app.delete("/api/admin/company-access/{mapping_id}")
+def admin_remove_company_access(mapping_id: int, user: dict = Depends(require_admin)):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if not user.get("is_super_admin"):
+                cur.execute("""
+                    SELECT cca.id FROM local_reference.client_company_access cca
+                    JOIN local_reference.clients c ON c.id = cca.client_id
+                    WHERE cca.id = %s AND c.company_name = %s
+                """, (mapping_id, user["company_name"]))
+                if not cur.fetchone():
+                    raise HTTPException(status_code=403, detail="Access denied")
+            cur.execute("DELETE FROM local_reference.client_company_access WHERE id = %s", (mapping_id,))
+            conn.commit()
+            cache_bust()
+            return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.get("/api/admin/suggest-aes")
+def suggest_aes(q: str = "", user: dict = Depends(require_admin)):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) AS ae_name
+                FROM shopworks.employee e
+                WHERE TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) LIKE %s
+                  AND e.first_name IS NOT NULL AND e.first_name != ''
+                ORDER BY ae_name
+                LIMIT 20
+                """,
+                (f"%{q}%",),
+            )
+            return {"aes": [r["ae_name"] for r in cur.fetchall() if r["ae_name"].strip()]}
     finally:
         conn.close()
 

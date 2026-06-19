@@ -6,6 +6,8 @@ import {
   adminGetContacts, adminAddContact, adminRemoveContact,
   adminSuggestContacts, adminGetCompanies, adminResendInvite,
   adminGetLogs, adminBustCache, adminGetCacheInfo,
+  adminGetAeAccess, adminAddAeAccess, adminRemoveAeAccess, adminSuggestAes,
+  adminGetCompanyAccess, adminAddCompanyAccess, adminRemoveCompanyAccess,
 } from '../api'
 
 const AVATAR_COLORS = [
@@ -26,8 +28,10 @@ function initials(email = '') {
 
 // ── Add Client Modal ──────────────────────────────────────────────────────────
 
-function AddClientModal({ onSave, onClose }) {
+function AddClientModal({ onSave, onClose, onUpdateClient }) {
   const [form, setForm]                   = useState({ email: '', company_name: '', is_admin: false, password: '' })
+  const [isSuperAdmin_, setIsSuperAdmin_] = useState(false)
+  const [isViewAll_, setIsViewAll_]       = useState(false)
   const [saving, setSaving]               = useState(false)
   const [error, setError]                 = useState('')
   const [inviteUrl, setInviteUrl]         = useState('')
@@ -41,6 +45,23 @@ function AddClientModal({ onSave, onClose }) {
   const [showContactDrop, setShowContactDrop]       = useState(false)
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  function toggleSuperAdmin(checked) {
+    setIsSuperAdmin_(checked)
+    if (checked) {
+      setIsViewAll_(false)
+      setForm(f => ({ ...f, company_name: 'PXP Solutions', is_admin: true }))
+      setContacts([])
+    } else {
+      setForm(f => ({ ...f, company_name: '', is_admin: false }))
+    }
+  }
+
+  function toggleViewAll(checked) {
+    setIsViewAll_(checked)
+    setForm(f => ({ ...f, company_name: '', is_admin: false }))
+    if (checked) setContacts([])
+  }
 
   // Company autocomplete
   useEffect(() => {
@@ -80,9 +101,15 @@ function AddClientModal({ onSave, onClose }) {
     setError('')
     try {
       const result = await onSave(form)
-      // Add contact restrictions if any were specified
-      if (result?.id && contacts.length > 0) {
-        await Promise.all(contacts.map(c => adminAddContact(result.id, c)))
+      if (result?.id) {
+        if (isSuperAdmin_) {
+          await onUpdateClient(result.id, { is_super_admin: true })
+        } else if (isViewAll_) {
+          await onUpdateClient(result.id, { view_all_orders: true })
+        }
+        if (contacts.length > 0) {
+          await Promise.all(contacts.map(c => adminAddContact(result.id, c)))
+        }
       }
       if (result?.invite_url) {
         if (result?.email_error) {
@@ -116,6 +143,74 @@ function AddClientModal({ onSave, onClose }) {
 
         <form onSubmit={submit} className="p-6 space-y-5">
 
+          {/* ── Super Admin toggle ────────────────────────────────── */}
+          <button
+            type="button"
+            onClick={() => toggleSuperAdmin(!isSuperAdmin_)}
+            className="w-full flex items-center justify-between rounded-xl px-4 py-3 transition-all"
+            style={{
+              background: isSuperAdmin_ ? '#F5F3FF' : '#F8FAFC',
+              border: `1.5px solid ${isSuperAdmin_ ? '#C4B5FD' : '#E2E8F0'}`,
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: isSuperAdmin_ ? '#7C3AED' : '#E2E8F0' }}>
+                <svg className="w-4 h-4" fill="none" stroke={isSuperAdmin_ ? '#fff' : '#94A3B8'} strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold" style={{ color: isSuperAdmin_ ? '#5B21B6' : '#374151' }}>
+                  Super Admin
+                </p>
+                <p className="text-xs" style={{ color: isSuperAdmin_ ? '#7C3AED' : '#9CA3AF' }}>
+                  {isSuperAdmin_ ? 'Full access to all companies and orders' : 'Grant access to every order across all companies'}
+                </p>
+              </div>
+            </div>
+            <div className="w-10 h-6 rounded-full flex-shrink-0 flex items-center px-0.5 transition-all"
+              style={{ background: isSuperAdmin_ ? '#7C3AED' : '#D1D5DB' }}>
+              <div className="w-5 h-5 bg-white rounded-full shadow transition-all"
+                style={{ transform: isSuperAdmin_ ? 'translateX(16px)' : 'translateX(0)' }} />
+            </div>
+          </button>
+
+          {/* ── Internal PXP Staff toggle — only when Super Admin is off ── */}
+          {!isSuperAdmin_ && (
+            <button
+              type="button"
+              onClick={() => toggleViewAll(!isViewAll_)}
+              className="w-full flex items-center justify-between rounded-xl px-4 py-3 transition-all"
+              style={{
+                background: isViewAll_ ? '#F5F3FF' : '#F8FAFC',
+                border: `1.5px solid ${isViewAll_ ? '#C4B5FD' : '#E2E8F0'}`,
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: isViewAll_ ? '#7C3AED' : '#E2E8F0' }}>
+                  <svg className="w-4 h-4" fill="none" stroke={isViewAll_ ? '#fff' : '#94A3B8'} strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold" style={{ color: isViewAll_ ? '#5B21B6' : '#374151' }}>
+                    Internal PXP Staff
+                  </p>
+                  <p className="text-xs" style={{ color: isViewAll_ ? '#7C3AED' : '#9CA3AF' }}>
+                    {isViewAll_ ? 'Can see orders across all companies (AE-filtered)' : 'Grant sales team / AE access to all companies'}
+                  </p>
+                </div>
+              </div>
+              <div className="w-10 h-6 rounded-full flex-shrink-0 flex items-center px-0.5 transition-all"
+                style={{ background: isViewAll_ ? '#7C3AED' : '#D1D5DB' }}>
+                <div className="w-5 h-5 bg-white rounded-full shadow transition-all"
+                  style={{ transform: isViewAll_ ? 'translateX(16px)' : 'translateX(0)' }} />
+              </div>
+            </button>
+          )}
+
           {/* ── Account info ──────────────────────────────────────── */}
           <div>
             <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-3">Account</p>
@@ -125,41 +220,48 @@ function AddClientModal({ onSave, onClose }) {
                 <input type="email" required className="input" value={form.email}
                   onChange={e => set('email', e.target.value)} placeholder="jane@company.com" autoFocus />
               </div>
-              <div className="relative">
-                <label className="label">Company name</label>
-                <input
-                  required
-                  className="input"
-                  value={form.company_name}
-                  onChange={e => { set('company_name', e.target.value); setShowCompanyDrop(true); setContacts([]) }}
-                  onFocus={() => setShowCompanyDrop(true)}
-                  onBlur={() => setTimeout(() => setShowCompanyDrop(false), 150)}
-                  placeholder="Type to search companies…"
-                  autoComplete="off"
-                />
-                {showCompanyDrop && companySuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-md z-30 max-h-48 overflow-y-auto">
-                    {companySuggestions.map(c => (
-                      <button key={c} type="button"
-                        onMouseDown={() => { set('company_name', c); setShowCompanyDrop(false); setContacts([]) }}
-                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 text-slate-700 hover:text-navy transition first:rounded-t-xl last:rounded-b-xl">
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2.5 bg-slate-50 rounded-lg px-3 py-2.5">
-                <input type="checkbox" id="is_admin" checked={form.is_admin}
-                  onChange={e => set('is_admin', e.target.checked)} className="w-4 h-4 accent-brand rounded" />
-                <label htmlFor="is_admin" className="text-sm text-slate-700 cursor-pointer select-none">
-                  Grant admin panel access
-                </label>
-              </div>
+
+              {!isSuperAdmin_ && (
+                <div className="relative">
+                  <label className="label">Company name</label>
+                  <input
+                    required
+                    className="input"
+                    value={form.company_name}
+                    onChange={e => { set('company_name', e.target.value); setShowCompanyDrop(true); setContacts([]) }}
+                    onFocus={() => setShowCompanyDrop(true)}
+                    onBlur={() => setTimeout(() => setShowCompanyDrop(false), 150)}
+                    placeholder="Type to search companies…"
+                    autoComplete="off"
+                  />
+                  {showCompanyDrop && companySuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-md z-30 max-h-48 overflow-y-auto">
+                      {companySuggestions.map(c => (
+                        <button key={c} type="button"
+                          onMouseDown={() => { set('company_name', c); setShowCompanyDrop(false); setContacts([]) }}
+                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 text-slate-700 hover:text-navy transition first:rounded-t-xl last:rounded-b-xl">
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!isSuperAdmin_ && !isViewAll_ && (
+                <div className="flex items-center gap-2.5 bg-slate-50 rounded-lg px-3 py-2.5">
+                  <input type="checkbox" id="is_admin" checked={form.is_admin}
+                    onChange={e => set('is_admin', e.target.checked)} className="w-4 h-4 accent-brand rounded" />
+                  <label htmlFor="is_admin" className="text-sm text-slate-700 cursor-pointer select-none">
+                    Grant admin panel access
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* ── Order access ──────────────────────────────────────── */}
+          {/* ── Order access — hidden for super admins and view_all users ── */}
+          {!isSuperAdmin_ && !isViewAll_ && (
           <div className="border-t border-slate-100 pt-4">
             <div className="flex items-start justify-between mb-1">
               <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Order Access</p>
@@ -174,7 +276,6 @@ function AddClientModal({ onSave, onClose }) {
                 : `This client will only see orders where the contact name matches:`}
             </p>
 
-            {/* Contact tags */}
             {contacts.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {contacts.map(name => (
@@ -191,7 +292,6 @@ function AddClientModal({ onSave, onClose }) {
               </div>
             )}
 
-            {/* Contact search */}
             <div className="relative flex gap-2">
               <div className="flex-1 relative">
                 <input
@@ -224,6 +324,7 @@ function AddClientModal({ onSave, onClose }) {
               </button>
             </div>
           </div>
+          )}
 
           {/* Invite link — shown after account is created */}
           {inviteUrl ? (
@@ -338,6 +439,14 @@ export default function AdminPage() {
   const [cacheInfo, setCacheInfo]     = useState(null)
   const [bustingCache, setBustingCache] = useState(false)
   const [mobileShowDetail, setMobileShowDetail] = useState(false)
+  const [aeAccess, setAeAccess]           = useState([])
+  const [aeInput, setAeInput]             = useState('')
+  const [aeSuggestions, setAeSuggestions] = useState([])
+  const [showAeDropdown, setShowAeDropdown] = useState(false)
+  const [companyAccess, setCompanyAccess] = useState([])
+  const [companyAccessInput, setCompanyAccessInput] = useState('')
+  const [companyAccessSuggestions, setCompanyAccessSuggestions] = useState([])
+  const [showCompanyAccessDrop, setShowCompanyAccessDrop] = useState(false)
 
   const selected = clients.find(c => c.id === selectedId) || null
 
@@ -356,8 +465,10 @@ export default function AdminPage() {
     setCompanyDraft('')
     setResendLink('')
     setResendCopied(false)
-    if (!selectedId) { setContacts([]); setMobileShowDetail(false); return }
+    if (!selectedId) { setContacts([]); setAeAccess([]); setCompanyAccess([]); setMobileShowDetail(false); return }
     adminGetContacts(selectedId).then(d => setContacts(d?.contacts || []))
+    adminGetAeAccess(selectedId).then(d => setAeAccess(d?.ae_access || []))
+    adminGetCompanyAccess(selectedId).then(d => setCompanyAccess(d?.company_access || []))
   }, [selectedId])
 
   useEffect(() => {
@@ -416,6 +527,60 @@ export default function AdminPage() {
 
   async function handleToggleSuperAdmin(client) {
     await adminUpdateClient(client.id, { is_super_admin: !client.is_super_admin })
+    await fetchClients()
+  }
+
+  useEffect(() => {
+    if (!aeInput) { setAeSuggestions([]); return }
+    const t = setTimeout(() => {
+      adminSuggestAes(aeInput).then(d => setAeSuggestions(d?.aes || []))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [aeInput])
+
+  useEffect(() => {
+    if (!companyAccessInput) { setCompanyAccessSuggestions([]); return }
+    const t = setTimeout(() => {
+      adminGetCompanies(companyAccessInput).then(d => setCompanyAccessSuggestions(d?.companies || []))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [companyAccessInput])
+
+  async function handleAddAeAccess() {
+    if (!aeInput.trim() || !selectedId) return
+    try {
+      await adminAddAeAccess(selectedId, aeInput.trim())
+      setAeInput('')
+      setAeSuggestions([])
+      const data = await adminGetAeAccess(selectedId)
+      setAeAccess(data?.ae_access || [])
+      await fetchClients()
+    } catch (e) { alert(e.message) }
+  }
+
+  async function handleRemoveAeAccess(mappingId) {
+    await adminRemoveAeAccess(mappingId)
+    setAeAccess(a => a.filter(x => x.id !== mappingId))
+  }
+
+  async function handleAddCompanyAccess() {
+    if (!companyAccessInput.trim() || !selectedId) return
+    try {
+      await adminAddCompanyAccess(selectedId, companyAccessInput.trim())
+      setCompanyAccessInput('')
+      setCompanyAccessSuggestions([])
+      const data = await adminGetCompanyAccess(selectedId)
+      setCompanyAccess(data?.company_access || [])
+    } catch (e) { alert(e.message) }
+  }
+
+  async function handleRemoveCompanyAccess(mappingId) {
+    await adminRemoveCompanyAccess(mappingId)
+    setCompanyAccess(a => a.filter(x => x.id !== mappingId))
+  }
+
+  async function handleToggleViewAllOrders(client) {
+    await adminUpdateClient(client.id, { view_all_orders: !client.view_all_orders })
     await fetchClients()
   }
 
@@ -716,6 +881,17 @@ export default function AdminPage() {
                     {selected.is_super_admin ? 'Super Admin: On' : 'Super Admin: Off'}
                   </button>
                   <button
+                    onClick={() => handleToggleViewAllOrders(selected)}
+                    className={[
+                      'text-xs px-3 py-1.5 rounded-lg font-semibold transition',
+                      selected.view_all_orders
+                        ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    ].join(' ')}
+                  >
+                    {selected.view_all_orders ? 'View All Orders: On' : 'View All Orders: Off'}
+                  </button>
+                  <button
                     onClick={() => handleToggleAdmin(selected)}
                     className={[
                       'text-xs px-3 py-1.5 rounded-lg font-semibold transition',
@@ -795,6 +971,117 @@ export default function AdminPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Company Access and AE Access — only shown when view_all_orders is enabled */}
+              {selected.view_all_orders && (
+                <div className="border-t border-slate-200 pt-5">
+                  {/* Company Access section */}
+                  <div className="mb-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-navy text-sm">Company Access</h3>
+                      {companyAccess.length === 0 && (
+                        <span className="text-xs bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-full font-medium">All companies</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">
+                      {companyAccess.length === 0
+                        ? 'No company filter — this user sees orders from all companies.'
+                        : 'This user sees only orders from these companies:'}
+                    </p>
+                    {companyAccess.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {companyAccess.map(a => (
+                          <div key={a.id} className="flex items-center gap-1.5 bg-sky-50 border border-sky-200 text-sky-800 rounded-full pl-3 pr-1.5 py-1">
+                            <span className="text-xs font-medium">{a.company_name}</span>
+                            <button onClick={() => handleRemoveCompanyAccess(a.id)}
+                              className="w-4 h-4 rounded-full bg-sky-200 hover:bg-sky-400 text-sky-800 hover:text-white transition flex items-center justify-center flex-shrink-0">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="relative flex gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          value={companyAccessInput}
+                          onChange={e => { setCompanyAccessInput(e.target.value); setShowCompanyAccessDrop(true) }}
+                          onFocus={() => setShowCompanyAccessDrop(true)}
+                          onBlur={() => setTimeout(() => setShowCompanyAccessDrop(false), 150)}
+                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddCompanyAccess())}
+                          placeholder="Search companies…"
+                          className="input"
+                        />
+                        {showCompanyAccessDrop && companyAccessSuggestions.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-md z-20 max-h-48 overflow-y-auto">
+                            {companyAccessSuggestions.filter(s => !companyAccess.some(a => a.company_name === s)).map(s => (
+                              <button key={s} onMouseDown={() => { setCompanyAccessInput(s); setCompanyAccessSuggestions([]); setShowCompanyAccessDrop(false) }}
+                                className="w-full text-left px-3 py-2.5 text-sm hover:bg-sky-50 text-slate-700 hover:text-navy transition first:rounded-t-xl last:rounded-b-xl">
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={handleAddCompanyAccess} disabled={!companyAccessInput.trim()} className="btn-primary px-4 disabled:opacity-40">Add</button>
+                    </div>
+                  </div>
+
+                  {/* AE Access section */}
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold text-navy text-sm">AE Access</h3>
+                    {aeAccess.length === 0 && (
+                      <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full font-medium">All orders visible</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">
+                    {aeAccess.length === 0
+                      ? 'No AE filter — this user sees all orders across all companies.'
+                      : 'This user sees only orders assigned to these PXP AEs:'}
+                  </p>
+                  {aeAccess.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {aeAccess.map(a => (
+                        <div key={a.id} className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-800 rounded-full pl-3 pr-1.5 py-1">
+                          <span className="text-xs font-medium">{a.ae_name}</span>
+                          <button onClick={() => handleRemoveAeAccess(a.id)}
+                            className="w-4 h-4 rounded-full bg-purple-200 hover:bg-purple-400 text-purple-800 hover:text-white transition flex items-center justify-center flex-shrink-0">
+                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="relative flex gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        value={aeInput}
+                        onChange={e => { setAeInput(e.target.value); setShowAeDropdown(true) }}
+                        onFocus={() => setShowAeDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowAeDropdown(false), 150)}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddAeAccess())}
+                        placeholder="Search AE names…"
+                        className="input"
+                      />
+                      {showAeDropdown && aeSuggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-md z-20 max-h-48 overflow-y-auto">
+                          {aeSuggestions.filter(s => !aeAccess.some(a => a.ae_name === s)).map(s => (
+                            <button key={s} onMouseDown={() => { setAeInput(s); setAeSuggestions([]); setShowAeDropdown(false) }}
+                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-purple-50 text-slate-700 hover:text-navy transition first:rounded-t-xl last:rounded-b-xl">
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={handleAddAeAccess} disabled={!aeInput.trim()} className="btn-primary px-4 disabled:opacity-40">Add</button>
+                  </div>
+                </div>
+              )}
 
               {/* Resend invite — only shown if account not yet activated */}
               {selected.invite_status !== 'active' && (
@@ -886,6 +1173,7 @@ export default function AdminPage() {
       {showAddModal && (
         <AddClientModal
           onSave={adminCreateClient}
+          onUpdateClient={adminUpdateClient}
           onClose={async () => { setShowAddModal(false); await fetchClients() }}
         />
       )}
