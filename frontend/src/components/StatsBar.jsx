@@ -36,7 +36,7 @@ const STATS = [
   },
 ]
 
-export default function StatsBar({ orders }) {
+export default function StatsBar({ orders, showOverdue }) {
   const [hovered, setHovered] = useState(null)
 
   const total   = orders.length
@@ -46,9 +46,12 @@ export default function StatsBar({ orders }) {
   const overdue = orders.filter(isOverdue).length
   const values  = { total, active, shipped, onHold, overdue }
 
+  // Overdue is internal-only; clients and company admins don't see that card.
+  const stats = showOverdue ? STATS : STATS.filter(s => s.key !== 'overdue')
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 px-4 sm:px-5 py-3 flex-shrink-0 print:hidden">
-      {STATS.map((s, i) => {
+    <div className={`grid grid-cols-2 ${showOverdue ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-3 px-4 sm:px-5 py-3 flex-shrink-0 print:hidden`}>
+      {stats.map((s, i) => {
         const isHovered = hovered === s.key
         const val = values[s.key]
         return (

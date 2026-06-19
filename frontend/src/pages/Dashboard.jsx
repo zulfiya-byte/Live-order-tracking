@@ -146,7 +146,9 @@ export default function Dashboard() {
     design_name:    unique(allOrders.map(o => o.design_name)),
   }), [allOrders])
 
-  const currentTab = TABS.find(t => t.id === activeTab)
+  // The Overdue tab/stat/highlighting is internal-only — super admins see it, clients and company admins don't.
+  const visibleTabs = superAdmin ? TABS : TABS.filter(t => t.id !== 'overdue')
+  const currentTab = visibleTabs.find(t => t.id === activeTab) || visibleTabs[0]
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-surface">
@@ -279,7 +281,7 @@ export default function Dashboard() {
       </header>
 
       {/* ── Stats bar ──────────────────────────────────────────────────── */}
-      {!loading && <StatsBar orders={allOrders} />}
+      {!loading && <StatsBar orders={allOrders} showOverdue={superAdmin} />}
 
       {/* ── Main content ───────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
@@ -330,7 +332,7 @@ export default function Dashboard() {
             {/* Tabs row */}
             <div className="flex items-end justify-between">
               <div className="flex items-end gap-0.5 overflow-x-auto scrollbar-hide -mb-px">
-                {TABS.map(tab => {
+                {visibleTabs.map(tab => {
                   const count = tabCount(tab.id)
                   const active = activeTab === tab.id
                   return (
@@ -439,13 +441,13 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <OrderTable orders={displayedOrders} loading={loading} error={error} tabKey={activeTab} onRowClick={setSelectedOrder} />
+            <OrderTable orders={displayedOrders} loading={loading} error={error} tabKey={activeTab} onRowClick={setSelectedOrder} showOverdue={superAdmin} />
           </div>
         </main>
       </div>
 
       {/* Order detail drawer */}
-      {selectedOrder && <OrderDetailDrawer order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
+      {selectedOrder && <OrderDetailDrawer order={selectedOrder} onClose={() => setSelectedOrder(null)} showOverdue={superAdmin} />}
     </div>
   )
 }

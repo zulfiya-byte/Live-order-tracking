@@ -28,7 +28,7 @@ function Step({ done, label }) {
   )
 }
 
-export default function OrderDetailDrawer({ order, onClose }) {
+export default function OrderDetailDrawer({ order, onClose, showOverdue }) {
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -37,7 +37,7 @@ export default function OrderDetailDrawer({ order, onClose }) {
 
   if (!order) return null
 
-  const overdue = isOverdue(order)
+  const overdue = showOverdue && isOverdue(order)
   const accent = order.shipped ? '#16A34A' : overdue ? '#DC2626' : order.on_hold ? '#D97706' : '#0369A1'
 
   return (

@@ -94,7 +94,7 @@ function SortIcon({ active, dir }) {
       </svg>
 }
 
-function Cell({ col, row }) {
+function Cell({ col, row, showOverdue }) {
   const val = row[col.key]
 
   if (col.type === 'hold') {
@@ -136,7 +136,7 @@ function Cell({ col, row }) {
   }
 
   if (col.type === 'date') {
-    const overdue = col.key === 'request_to_ship_date' && isOverdue(row)
+    const overdue = showOverdue && col.key === 'request_to_ship_date' && isOverdue(row)
     return (
       <span className={`font-mono tabular-nums text-[11px] ${overdue ? 'text-red-600 font-bold' : 'text-slate-600'}`}
         title={overdue ? 'Past requested ship date' : undefined}>
@@ -154,7 +154,7 @@ function Cell({ col, row }) {
 
 // ── Mobile card components ───────────────────────────────────────────────────
 
-function StatusBadge({ row }) {
+function StatusBadge({ row, showOverdue }) {
   if (row.shipped) return (
     <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full"
       style={{ background: '#DCFCE7', color: '#166534' }}>
@@ -164,7 +164,7 @@ function StatusBadge({ row }) {
       Shipped
     </span>
   )
-  if (isOverdue(row)) return (
+  if (showOverdue && isOverdue(row)) return (
     <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full"
       style={{ background: '#FEE2E2', color: '#B91C1C' }}>
       <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -217,8 +217,8 @@ function InfoPair({ label, value }) {
   )
 }
 
-function MobileCard({ row, i, onClick }) {
-  const overdue     = isOverdue(row)
+function MobileCard({ row, i, onClick, showOverdue }) {
+  const overdue     = showOverdue && isOverdue(row)
   const accentColor = row.shipped ? '#16A34A' : overdue ? '#DC2626' : row.on_hold ? '#D97706' : '#0369A1'
   const borderColor = row.shipped ? '#BBF7D0' : overdue ? '#FECACA' : row.on_hold ? '#FDE68A' : '#BFDBFE'
   const bgColor     = row.shipped ? '#F0FDF4' : overdue ? '#FEF2F2' : row.on_hold ? '#FFFBEB' : '#FFFFFF'
@@ -251,7 +251,7 @@ function MobileCard({ row, i, onClick }) {
             </p>
           </div>
         </div>
-        <StatusBadge row={row} />
+        <StatusBadge row={row} showOverdue={showOverdue} />
       </div>
 
       <div className="px-4 pt-3 pb-4 space-y-3">
@@ -383,7 +383,7 @@ function SkeletonRows() {
   )
 }
 
-export default function OrderTable({ orders, loading, error, tabKey, onRowClick }) {
+export default function OrderTable({ orders, loading, error, tabKey, onRowClick, showOverdue }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
 
   function handleSort(colKey) {
@@ -469,7 +469,7 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick 
       <div className="md:hidden flex-1 overflow-y-auto">
         <div className="p-3 flex flex-col gap-3">
           {sorted.map((row, i) => (
-            <MobileCard key={`${row.order_number}-${i}`} row={row} i={i} onClick={() => onRowClick?.(row)} />
+            <MobileCard key={`${row.order_number}-${i}`} row={row} i={i} onClick={() => onRowClick?.(row)} showOverdue={showOverdue} />
           ))}
         </div>
       </div>
@@ -524,7 +524,7 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick 
                 {COLS.map(c => (
                   <td key={c.key} className="px-3 py-2.5 whitespace-nowrap text-slate-700"
                     style={{ borderRight: '1px solid #F1F5F9' }}>
-                    <Cell col={c} row={row} />
+                    <Cell col={c} row={row} showOverdue={showOverdue} />
                   </td>
                 ))}
               </tr>
