@@ -163,7 +163,9 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <img src="/pxp-logo.png" alt="PXP Solutions" className="h-9 object-contain animate-pop-in" />
             <div className="hidden sm:block border-l border-slate-200 pl-3">
-              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold leading-none mb-0.5">Order Portal</p>
+              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold leading-none mb-0.5">
+                {greeting()} · {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              </p>
               {superAdmin ? (
                 <div className="relative flex items-center gap-1.5">
                   <div className="relative">
@@ -299,36 +301,9 @@ export default function Dashboard() {
 
         <main className="flex-1 flex flex-col overflow-hidden">
 
-          {/* ── Greeting + Tabs + toolbar ────────────────────────────── */}
-          <div className="px-4 sm:px-5 pt-3 pb-0 flex-shrink-0 print:hidden bg-white"
+          {/* ── Tabs + toolbar ───────────────────────────────────────── */}
+          <div className="px-4 sm:px-5 pt-2.5 pb-0 flex-shrink-0 print:hidden bg-white"
             style={{ borderBottom: '1px solid #E2E8F0' }}>
-
-            {/* Greeting row */}
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-navy">
-                {greeting()},{' '}
-                <span style={{ color: '#0369A1' }}>{superAdmin ? 'PXP Admin' : viewAllOrders ? 'PXP Sales' : (company || 'there')}</span>
-                <span className="text-slate-400 font-normal text-xs ml-2 hidden sm:inline">
-                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                </span>
-              </p>
-
-              {/* Mobile filter toggle */}
-              <button
-                onClick={() => setShowFilters(v => !v)}
-                className="lg:hidden flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-colors"
-                style={{
-                  borderColor: showFilters ? '#29ABE2' : '#CBD5E1',
-                  color: showFilters ? '#0369A1' : '#64748B',
-                  background: showFilters ? '#E0F5FB' : 'transparent',
-                }}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                </svg>
-                Filters
-              </button>
-            </div>
 
             {/* Tabs row */}
             <div className="flex items-end justify-between">
@@ -375,20 +350,38 @@ export default function Dashboard() {
                 })}
               </div>
 
-              {/* Export/Print — desktop */}
-              <div className="hidden sm:flex items-center gap-1.5 pb-1 ml-2 flex-shrink-0">
-                <button onClick={() => exportCSV(displayedOrders, currentTab.label, company)} className="btn-ghost flex items-center gap-1.5">
+              {/* Right controls — filter toggle (mobile) + export/print (desktop) */}
+              <div className="flex items-center gap-1.5 pb-1 ml-2 flex-shrink-0">
+                {/* Mobile filter toggle */}
+                <button
+                  onClick={() => setShowFilters(v => !v)}
+                  className="lg:hidden flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-colors"
+                  style={{
+                    borderColor: showFilters ? '#29ABE2' : '#CBD5E1',
+                    color: showFilters ? '#0369A1' : '#64748B',
+                    background: showFilters ? '#E0F5FB' : 'transparent',
+                  }}
+                >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                   </svg>
-                  CSV
+                  Filters
                 </button>
-                <button onClick={() => window.print()} className="btn-ghost flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  Print
-                </button>
+                {/* Export/Print — desktop */}
+                <div className="hidden sm:flex items-center gap-1.5">
+                  <button onClick={() => exportCSV(displayedOrders, currentTab.label, company)} className="btn-ghost flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    </svg>
+                    CSV
+                  </button>
+                  <button onClick={() => window.print()} className="btn-ghost flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print
+                  </button>
+                </div>
               </div>
             </div>
           </div>
