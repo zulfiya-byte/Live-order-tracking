@@ -74,6 +74,10 @@ export async function getFilters(companyOverride = '') {
   return apiFetch(`/api/filters${params}`)
 }
 
+export async function getOrderTracking(orderNumber) {
+  return apiFetch(`/api/orders/${orderNumber}/tracking`)
+}
+
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export async function adminGetClients() {

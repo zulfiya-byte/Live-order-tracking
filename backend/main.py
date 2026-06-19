@@ -21,6 +21,7 @@ from db import get_conn
 from auth import verify_token, require_admin, require_super_admin, check_password, make_token, hash_password
 from email_utils import send_invite_email, send_reset_email, send_error_alert
 from cache import cache_get, cache_set, cache_bust, cache_info
+import ups
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -507,6 +508,83 @@ def get_filters(company_override: str = None, user: dict = Depends(verify_token)
     finally:
         conn.close()
     return {"order_types": order_types}
+
+
+# ── Live tracking (UPS) ─────────────────────────────────────────────────────────
+
+_TRACK_CACHE: dict = {}      # tracking_number -> {"data": dict, "ts": float}
+_TRACK_TTL = 3600            # re-check non-delivered shipments at most hourly
+
+
+def _order_tracking_numbers(user: dict, order_number: int) -> list:
+    """Tracking numbers for an order the requesting user is allowed to see.
+
+    Reuses the same company / contact / AE / super-admin access filter as the
+    orders list, so a client can only pull tracking for their own orders.
+    Returns [] when the order is not visible or has no tracking numbers.
+    """
+    is_super = user.get("is_super_admin")
+    view_all = bool(user.get("view_all_orders"))
+    client_id = user["client_id"]
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            contact_emails, ae_names, company_names = [], [], []
+            if is_super:
+                pass
+            elif view_all:
+                cur.execute("SELECT ae_name FROM local_reference.client_ae_access WHERE client_id=%s", (client_id,))
+                ae_names = [r["ae_name"] for r in cur.fetchall()]
+                cur.execute("SELECT company_name FROM local_reference.client_company_access WHERE client_id=%s", (client_id,))
+                company_names = [r["company_name"] for r in cur.fetchall()]
+            else:
+                cur.execute("SELECT contact_name FROM local_reference.client_contacts WHERE client_id=%s", (client_id,))
+                contact_emails = [r["contact_name"] for r in cur.fetchall()]
+
+            clauses, args = ["o.ID_Order = %s"], [order_number]
+            if not is_super and not view_all:
+                clauses.append("o.CompanyName = %s")
+                args.append(user["company_name"])
+            extra_sql, extra_args = _build_filter_clause(
+                {}, contact_emails or None, ae_names or None, company_names or None)
+            sql = (
+                "SELECT GROUP_CONCAT(DISTINCT pi.TrackingNumber SEPARATOR ',') AS tn "
+                "FROM shopworks.orders o "
+                "LEFT JOIN shopworks.employee e ON e.id_employee = o.id_EmpCreatedBy "
+                "LEFT JOIN shopworks.pack_import pi ON pi.id_Order = CAST(o.ID_Order AS CHAR) "
+                "AND (pi.deleted != 1 OR pi.deleted IS NULL) "
+                "AND pi.TrackingNumber IS NOT NULL AND pi.TrackingNumber != '' "
+                "WHERE " + " AND ".join(clauses) + " " + extra_sql
+            )
+            cur.execute(sql, args + extra_args)
+            row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row or not row.get("tn"):
+        return []
+    return [t.strip() for t in row["tn"].split(",") if t.strip()]
+
+
+def _tracking_for(number: str) -> dict:
+    entry = _TRACK_CACHE.get(number)
+    if entry:
+        data = entry["data"]
+        if data.get("delivered") or (time.time() - entry["ts"] < _TRACK_TTL):
+            return data
+    result = ups.track(number)
+    # On a transient error, prefer previously cached data if we have it.
+    if result.get("error") and entry:
+        return entry["data"]
+    _TRACK_CACHE[number] = {"data": result, "ts": time.time()}
+    return result
+
+
+@app.get("/api/orders/{order_number}/tracking")
+def order_tracking(order_number: int, user: dict = Depends(verify_token)):
+    numbers = _order_tracking_numbers(user, order_number)
+    ups_numbers = [n for n in numbers if n.upper().startswith("1Z")]
+    results = [_tracking_for(n) for n in ups_numbers]
+    return {"tracking": results, "configured": ups.is_configured()}
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────

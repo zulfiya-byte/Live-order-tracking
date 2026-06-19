@@ -1,5 +1,92 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { TrackingLinks, isOverdue, parseDesigns } from './OrderTable'
+import { getOrderTracking } from '../api'
+
+const TRACK_STYLE = {
+  delivered:        { color: '#166534', bg: '#DCFCE7' },
+  out_for_delivery: { color: '#1D4ED8', bg: '#DBEAFE' },
+  in_transit:       { color: '#0369A1', bg: '#E0F2FE' },
+  label_created:    { color: '#475569', bg: '#F1F5F9' },
+  exception:        { color: '#B91C1C', bg: '#FEE2E2' },
+  unknown:          { color: '#64748B', bg: '#F1F5F9' },
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function fmtDate(s) {
+  if (!s || s.length < 10) return s || ''
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${MONTHS[+m - 1]} ${+d}, ${y}`
+}
+
+function hasUps(order) {
+  return (order.tracking_number || '').split(',').some(t => /^\s*1Z/i.test(t))
+}
+
+function LiveTracking({ orderNumber }) {
+  const [state, setState] = useState({ loading: true, items: [], error: null })
+
+  useEffect(() => {
+    let active = true
+    setState({ loading: true, items: [], error: null })
+    getOrderTracking(orderNumber)
+      .then(d => { if (active) setState({ loading: false, items: d?.tracking || [], error: null }) })
+      .catch(e => { if (active) setState({ loading: false, items: [], error: e.message }) })
+    return () => { active = false }
+  }, [orderNumber])
+
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-2">Live UPS Tracking</p>
+      {state.loading ? (
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <div className="w-3.5 h-3.5 border-2 border-slate-200 border-t-brand rounded-full animate-spin" />
+          Checking UPS…
+        </div>
+      ) : state.error ? (
+        <p className="text-xs text-slate-400">Tracking unavailable right now.</p>
+      ) : state.items.length === 0 ? (
+        <p className="text-xs text-slate-400">No live tracking available for this order.</p>
+      ) : (
+        <div className="space-y-3">
+          {state.items.map((t, i) => {
+            const style = TRACK_STYLE[t.status] || TRACK_STYLE.unknown
+            return (
+              <div key={i} className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5" style={{ background: style.bg }}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold leading-tight" style={{ color: style.color }}>
+                      {t.error ? 'Not available yet' : (t.status_desc || 'In Transit')}
+                    </p>
+                    {t.delivery_date && !t.error && (
+                      <p className="text-[11px] mt-0.5" style={{ color: style.color }}>
+                        {t.delivered ? 'Delivered' : 'Estimated'} {fmtDate(t.delivery_date)}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500 flex-shrink-0">{t.tracking_number}</span>
+                </div>
+                {t.events && t.events.length > 0 && (
+                  <ul className="divide-y divide-slate-100">
+                    {t.events.slice(0, 5).map((e, j) => (
+                      <li key={j} className="flex gap-2 px-3 py-1.5">
+                        <span className="text-[10px] text-slate-400 font-mono tabular-nums whitespace-nowrap pt-0.5">
+                          {fmtDate(e.date)}{e.time ? ` ${e.time}` : ''}
+                        </span>
+                        <span className="text-xs text-slate-700 leading-snug">
+                          {e.desc}{e.location ? <span className="text-slate-400"> — {e.location}</span> : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Row({ label, value, mono }) {
   if (value == null || value === '') return null
@@ -145,6 +232,9 @@ export default function OrderDetailDrawer({ order, onClose, showOverdue }) {
               </ul>
             </div>
           )}
+
+          {/* Live UPS tracking — only when the order has a 1Z number */}
+          {hasUps(order) && <LiveTracking orderNumber={order.order_number} />}
 
           {/* Production progress */}
           {!order.shipped && (
