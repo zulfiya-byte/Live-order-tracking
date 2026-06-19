@@ -44,6 +44,7 @@ export function TrackingLinks({ value, className = '' }) {
   )
 }
 
+// Full field list — used for CSV export and the detail drawer.
 export const COLS = [
   { key: 'product_quantity',     label: 'Qty',            type: 'num'  },
   { key: 'order_number',         label: 'Order #',        type: 'num'  },
@@ -52,7 +53,7 @@ export const COLS = [
   { key: 'pxp_ae',               label: 'PXP AE',         type: 'text' },
   { key: 'purchase_order',       label: 'PO #',           type: 'text' },
   { key: 'order_contact',        label: 'Contact',        type: 'text' },
-  { key: 'design_name',          label: 'Design Name',    type: 'text' },
+  { key: 'design_name',          label: 'Design Name',    type: 'design' },
   { key: 'approx_po_date',       label: 'Approx PO Date', type: 'date' },
   { key: 'request_to_ship_date', label: 'Req Ship Date',  type: 'date' },
   { key: 'on_hold',              label: 'On Hold?',       type: 'hold' },
@@ -66,6 +67,22 @@ export const COLS = [
   { key: 'notes_to_customer',    label: 'Notes',          type: 'note' },
   { key: 'customer',             label: 'Customer',       type: 'text' },
 ]
+
+// Curated columns shown in the grid — the rest open in the detail drawer on click.
+export const TABLE_COLS = [
+  { key: 'order_number',         label: 'Order #',       type: 'num'    },
+  { key: 'design_name',          label: 'Design',        type: 'design' },
+  { key: 'order_type',           label: 'Order Type',    type: 'text'   },
+  { key: 'request_to_ship_date', label: 'Req Ship Date', type: 'date'   },
+  { key: 'status',               label: 'Status',        type: 'status', noSort: true },
+  { key: 'tracking_number',      label: 'Tracking #',    type: 'track'  },
+  { key: 'customer',             label: 'Customer',      type: 'text'   },
+]
+
+// Split the GROUP_CONCAT'd design string into a list.
+export function parseDesigns(value) {
+  return (value || '').split('||').map(s => s.trim()).filter(Boolean)
+}
 
 function compareValues(a, b, type) {
   const aNull = a == null || a === ''
@@ -96,6 +113,11 @@ function SortIcon({ active, dir }) {
 
 function Cell({ col, row, showOverdue }) {
   const val = row[col.key]
+
+  // Synthesized summary column — derives from the row, not a single field.
+  if (col.type === 'status') {
+    return <StatusBadge row={row} showOverdue={showOverdue} />
+  }
 
   if (col.type === 'hold') {
     return val
@@ -129,6 +151,18 @@ function Cell({ col, row, showOverdue }) {
 
   if (col.type === 'track') {
     return <TrackingLinks value={val} />
+  }
+
+  if (col.type === 'design') {
+    const list = parseDesigns(val)
+    if (!list.length) return <span className="text-slate-300">—</span>
+    const first = list[0].length > 22 ? list[0].slice(0, 20) + '…' : list[0]
+    return (
+      <span title={list.join(', ')}>
+        {first}
+        {list.length > 1 && <span className="text-slate-400 font-medium"> +{list.length - 1}</span>}
+      </span>
+    )
   }
 
   if (col.type === 'num') {
@@ -255,9 +289,9 @@ function MobileCard({ row, i, onClick, showOverdue }) {
       </div>
 
       <div className="px-4 pt-3 pb-4 space-y-3">
-        {/* Design name — prominent */}
+        {/* Design name(s) — prominent */}
         {row.design_name && (
-          <p className="text-sm font-bold text-slate-800 leading-snug">{row.design_name}</p>
+          <p className="text-sm font-bold text-slate-800 leading-snug">{parseDesigns(row.design_name).join(', ')}</p>
         )}
 
         {/* Info grid */}
@@ -371,10 +405,10 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 8 }).map((_, i) => (
         <tr key={i} style={{ animationDelay: `${i * 0.04}s` }} className="animate-fade-in border-b border-slate-100">
-          {COLS.map((c, j) => (
+          {TABLE_COLS.map((c, j) => (
             <td key={c.key} className="px-3 py-2.5" style={{ borderRight: '1px solid #F1F5F9' }}>
               <div className="skeleton h-3 rounded"
-                style={{ width: j === 0 ? 28 : j === 18 ? 80 : j % 3 === 0 ? 60 : j % 3 === 1 ? 90 : 50 }} />
+                style={{ width: j === 0 ? 50 : j % 3 === 0 ? 80 : j % 3 === 1 ? 120 : 70 }} />
             </td>
           ))}
         </tr>
@@ -418,9 +452,9 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick,
         <table className="w-full text-xs border-collapse min-w-max">
           <thead className="sticky top-0 z-10">
             <tr>
-              {COLS.map((c, i) => (
+              {TABLE_COLS.map((c, i) => (
                 <th key={c.key} className="px-3 py-3 text-left font-semibold whitespace-nowrap tracking-wide text-white"
-                  style={{ background: '#002856', borderRight: i < COLS.length - 1 ? '1px solid #003a7a' : 'none' }}>
+                  style={{ background: '#002856', borderRight: i < TABLE_COLS.length - 1 ? '1px solid #003a7a' : 'none' }}>
                   {c.label}
                 </th>
               ))}
@@ -479,25 +513,26 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick,
         <table className="w-full text-xs border-collapse min-w-max">
           <thead className="sticky top-0 z-10">
             <tr>
-              {COLS.map((c, i) => {
+              {TABLE_COLS.map((c, i) => {
                 const active = sort.key === c.key
+                const sortable = !c.noSort
                 return (
                   <th
                     key={c.key}
-                    onClick={() => handleSort(c.key)}
-                    className="px-3 py-3 text-left font-semibold whitespace-nowrap tracking-wide text-white cursor-pointer select-none"
+                    onClick={() => sortable && handleSort(c.key)}
+                    className={`px-3 py-3 text-left font-semibold whitespace-nowrap tracking-wide text-white select-none ${sortable ? 'cursor-pointer' : ''}`}
                     style={{
                       background: active ? '#003a7a' : '#002856',
-                      borderRight: i < COLS.length - 1 ? '1px solid #003a7a' : 'none',
+                      borderRight: i < TABLE_COLS.length - 1 ? '1px solid #003a7a' : 'none',
                       transition: 'background 0.15s',
                     }}
-                    onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#003070' }}
+                    onMouseEnter={e => { if (sortable && !active) e.currentTarget.style.background = '#003070' }}
                     onMouseLeave={e => { if (!active) e.currentTarget.style.background = '#002856' }}
-                    title={`Sort by ${c.label}`}
+                    title={sortable ? `Sort by ${c.label}` : c.label}
                   >
                     <span className="flex items-center gap-1.5">
                       {c.label}
-                      <SortIcon active={active} dir={sort.dir} />
+                      {sortable && <SortIcon active={active} dir={sort.dir} />}
                     </span>
                   </th>
                 )
@@ -521,7 +556,7 @@ export default function OrderTable({ orders, loading, error, tabKey, onRowClick,
                   e.currentTarget.style.boxShadow = ''
                 }}
               >
-                {COLS.map(c => (
+                {TABLE_COLS.map(c => (
                   <td key={c.key} className="px-3 py-2.5 whitespace-nowrap text-slate-700"
                     style={{ borderRight: '1px solid #F1F5F9' }}>
                     <Cell col={c} row={row} showOverdue={showOverdue} />

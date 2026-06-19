@@ -234,7 +234,7 @@ SELECT
     TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) AS pxp_ae,
     o.CustomerPurchaseOrder                                                 AS purchase_order,
     o.ct_ContactNameFull                                                    AS order_contact,
-    od.ct_DesignName                                                        AS design_name,
+    GROUP_CONCAT(DISTINCT NULLIF(od.ct_DesignName,'') ORDER BY od.ct_DesignName SEPARATOR '||') AS design_name,
     o.date_OrderPlaced                                                      AS approx_po_date,
     o.date_OrderRequestedToShip                                             AS request_to_ship_date,
     (o.cn_sts_HoldOrderGraphic = '10')                                      AS on_hold,
@@ -275,7 +275,7 @@ _ORDERS_GROUP_BY = """
 GROUP BY
     o.ID_Order, o.cn_TotalProductQty_Current, o.id_OrderType, ot.name,
     l.location_name, e.first_name, e.last_name,
-    o.CustomerPurchaseOrder, o.ct_ContactNameFull, od.ct_DesignName,
+    o.CustomerPurchaseOrder, o.ct_ContactNameFull,
     o.date_OrderPlaced, o.date_OrderRequestedToShip,
     o.cn_sts_HoldOrderGraphic, o.sts_ArtDone, o.sts_Purchased,
     o.sts_Received, o.sts_Shipped, o.date_OrderShipped,

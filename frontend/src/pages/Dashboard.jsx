@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { getOrders, getFilters, logout, isAdmin, isSuperAdmin, isViewAllOrders, adminGetCompanies } from '../api'
 import Sidebar from '../components/Sidebar'
-import OrderTable, { COLS, isOverdue } from '../components/OrderTable'
+import OrderTable, { COLS, isOverdue, parseDesigns } from '../components/OrderTable'
 import OrderDetailDrawer from '../components/OrderDetailDrawer'
 import StatsBar from '../components/StatsBar'
 
@@ -35,6 +35,7 @@ function exportCSV(orders, tabLabel, company) {
       const v = o[c.key]
       if (v == null) return ''
       if (typeof v === 'boolean') return v ? 'Yes' : 'No'
+      if (c.key === 'design_name') return String(v).split('||').join(', ').replace(/"/g, '""')
       return String(v).replace(/"/g, '""')
     })
   )
@@ -143,7 +144,7 @@ export default function Dashboard() {
   const suggestions = useMemo(() => ({
     purchase_order: unique(allOrders.map(o => o.purchase_order)),
     order_contact:  unique(allOrders.map(o => o.order_contact)),
-    design_name:    unique(allOrders.map(o => o.design_name)),
+    design_name:    unique(allOrders.flatMap(o => parseDesigns(o.design_name))),
   }), [allOrders])
 
   // The Overdue tab/stat/highlighting is internal-only — super admins see it, clients and company admins don't.
