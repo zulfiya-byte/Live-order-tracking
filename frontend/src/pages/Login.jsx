@@ -45,7 +45,7 @@ export default function Login() {
       {/* ── Left panel — PXP blue brand ──────────────────────────────── */}
       <div
         className="hidden lg:flex flex-col justify-between w-[440px] flex-shrink-0 px-10 py-12 relative overflow-hidden"
-        style={{ background: 'linear-gradient(160deg, #0D6F94 0%, #1A9ED4 55%, #0D6F94 100%)' }}
+        style={{ background: '#0D6F94' }}
       >
         {/* Decorative circles */}
         <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }} />
@@ -91,7 +91,7 @@ export default function Login() {
 
       {/* ── Right panel — sign in form ────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center px-5 py-10"
-        style={{ background: 'linear-gradient(160deg, #F4F9FC 0%, #EBF5FB 100%)' }}>
+        style={{ background: '#F5F8FB' }}>
         <div className="w-full max-w-sm animate-slide-up">
 
           {/* Mobile logo */}

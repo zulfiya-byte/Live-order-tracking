@@ -147,8 +147,8 @@ export default function ChatWidget({ orders = [] }) {
       <button
         onClick={() => setOpen(o => !o)}
         aria-label="Open help and messages"
-        className="fixed bottom-16 right-4 sm:right-5 z-40 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105 active:scale-95 print:hidden"
-        style={{ background: 'linear-gradient(135deg, #0369A1, #0284C7)', boxShadow: '0 6px 24px rgba(3,105,161,0.45)' }}
+        className="fixed bottom-16 right-4 sm:right-5 z-40 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105 active:scale-95 print:hidden animate-float"
+        style={{ background: '#0369A1', boxShadow: '0 6px 24px rgba(3,105,161,0.45)' }}
       >
         {open ? (
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
@@ -171,7 +171,7 @@ export default function ChatWidget({ orders = [] }) {
         <div className="fixed bottom-36 right-4 sm:right-5 z-40 w-[calc(100vw-2rem)] max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up print:hidden"
           style={{ height: 'min(540px, 68vh)' }}>
           {/* Header */}
-          <div className="px-4 py-3 flex items-center gap-2.5 flex-shrink-0" style={{ background: 'linear-gradient(135deg, #0369A1, #0284C7)' }}>
+          <div className="px-4 py-3 flex items-center gap-2.5 flex-shrink-0" style={{ background: '#0369A1' }}>
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-3.6-7.2L21 3v9z" />

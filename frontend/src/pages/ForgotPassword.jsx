@@ -24,7 +24,7 @@ export default function ForgotPassword() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-5"
-      style={{ background: 'linear-gradient(160deg, #F4F9FC 0%, #EBF5FB 100%)' }}>
+      style={{ background: '#F5F8FB' }}>
       <div className="w-full max-w-sm animate-slide-up">
 
         <div className="flex justify-center mb-8">

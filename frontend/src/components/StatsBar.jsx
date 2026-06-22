@@ -26,7 +26,7 @@ export default function StatsBar({ orders, showOverdue }) {
         return (
           <div
             key={s.key}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 animate-slide-up"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 animate-slide-up lift"
             style={{ animationDelay: `${i * 0.05}s` }}
           >
             <span

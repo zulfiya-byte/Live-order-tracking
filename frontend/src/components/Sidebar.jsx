@@ -212,7 +212,7 @@ export default function Sidebar({ orderTypes, suggestions = {}, onFilter, loadin
           onClick={apply}
           disabled={loading}
           className="w-full font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all text-sm disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, #0369A1 0%, #0284C7 100%)', color: '#fff',
+          style={{ background: '#0369A1', color: '#fff',
             boxShadow: '0 2px 8px rgba(3,105,161,0.30)' }}
           onMouseEnter={e => { if (!loading) e.currentTarget.style.boxShadow = '0 4px 16px rgba(3,105,161,0.40)' }}
           onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(3,105,161,0.30)'}

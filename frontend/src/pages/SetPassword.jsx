@@ -102,7 +102,7 @@ export default function SetPassword() {
 
       {/* Left panel */}
       <div className="hidden lg:flex flex-col justify-between w-[400px] flex-shrink-0 px-10 py-12 relative overflow-hidden"
-        style={{ background: 'linear-gradient(160deg, #0D6F94 0%, #1A9ED4 55%, #0D6F94 100%)' }}>
+        style={{ background: '#0D6F94' }}>
         <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }} />
         <div className="absolute -bottom-24 -left-12 w-64 h-64 rounded-full" style={{ background: 'rgba(255,255,255,0.04)' }} />
 
@@ -138,7 +138,7 @@ export default function SetPassword() {
 
       {/* Right panel */}
       <div className="flex-1 flex items-center justify-center px-5 py-10"
-        style={{ background: 'linear-gradient(160deg, #F4F9FC 0%, #EBF5FB 100%)' }}>
+        style={{ background: '#F5F8FB' }}>
         <div className="w-full max-w-sm animate-slide-up">
 
           {/* Mobile logo */}
