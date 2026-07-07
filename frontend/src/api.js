@@ -78,6 +78,10 @@ export async function getOrderTracking(orderNumber) {
   return apiFetch(`/api/orders/${orderNumber}/tracking`)
 }
 
+export async function getOrderItems(orderNumber) {
+  return apiFetch(`/api/orders/${orderNumber}/items`)
+}
+
 // ── Messaging ───────────────────────────────────────────────────────────────
 
 export async function sendMessage(body, order_number = null) {

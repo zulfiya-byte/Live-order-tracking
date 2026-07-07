@@ -596,6 +596,114 @@ def order_tracking(order_number: int, user: dict = Depends(verify_token)):
     return {"tracking": results, "configured": ups.is_configured()}
 
 
+# ── Order line items (products) ───────────────────────────────────────────────
+
+def _user_can_see_order(user: dict, order_number: int) -> bool:
+    """True if the requesting user is allowed to see this order.
+
+    Reuses the exact company / contact / AE / super-admin access filter as the
+    orders list and the tracking endpoint, so a client can only pull line items
+    for their own orders.
+    """
+    is_super = user.get("is_super_admin")
+    view_all = bool(user.get("view_all_orders"))
+    client_id = user["client_id"]
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            contact_emails, ae_names, company_names = [], [], []
+            if is_super:
+                pass
+            elif view_all:
+                cur.execute("SELECT ae_name FROM local_reference.client_ae_access WHERE client_id=%s", (client_id,))
+                ae_names = [r["ae_name"] for r in cur.fetchall()]
+                cur.execute("SELECT company_name FROM local_reference.client_company_access WHERE client_id=%s", (client_id,))
+                company_names = [r["company_name"] for r in cur.fetchall()]
+            else:
+                cur.execute("SELECT contact_name FROM local_reference.client_contacts WHERE client_id=%s", (client_id,))
+                contact_emails = [r["contact_name"] for r in cur.fetchall()]
+
+            clauses, args = ["o.ID_Order = %s"], [order_number]
+            if not is_super and not view_all:
+                clauses.append("o.CompanyName = %s")
+                args.append(user["company_name"])
+            extra_sql, extra_args = _build_filter_clause(
+                {}, contact_emails or None, ae_names or None, company_names or None)
+            sql = (
+                "SELECT 1 FROM shopworks.orders o "
+                "LEFT JOIN shopworks.employee e ON e.id_employee = o.id_EmpCreatedBy "
+                "WHERE " + " AND ".join(clauses) + " " + extra_sql + " LIMIT 1"
+            )
+            cur.execute(sql, args + extra_args)
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+# Product/garment lines only: a non-empty part_color is the reliable signal that
+# a line is an item the customer ordered, not a decoration/service charge line.
+# Size-scale splits (e.g. LS14004, LS14004_2X, LS14004_XS) share a product name
+# and color, so we group by (product, color) and sum the six size buckets.
+#
+# `received` is the quantity actually received, summed from shopworks.line_receiving
+# (an append log with one row per receiving event, linked by id_line_oe; archived
+# rows excluded). The order line's own size_NN_act / line_quantity_actual columns
+# are not populated, so line_receiving is the source of truth for received qty.
+_ITEMS_SQL = """
+SELECT
+    TRIM(ol.part_description) AS product,
+    MIN(TRIM(ol.part_number)) AS part_number,
+    TRIM(ol.part_color)       AS color,
+    SUM(COALESCE(ol.size_01_req,0)+COALESCE(ol.size_02_req,0)+COALESCE(ol.size_03_req,0)
+       +COALESCE(ol.size_04_req,0)+COALESCE(ol.size_05_req,0)+COALESCE(ol.size_06_req,0)) AS quantity,
+    SUM(COALESCE(rc.recv,0)) AS received
+FROM shopworks.order_lines_oe ol
+LEFT JOIN (
+    SELECT id_line_oe,
+           SUM(COALESCE(size_01,0)+COALESCE(size_02,0)+COALESCE(size_03,0)
+              +COALESCE(size_04,0)+COALESCE(size_05,0)+COALESCE(size_06,0)) AS recv
+    FROM shopworks.line_receiving
+    WHERE (is_archived IS NULL OR is_archived <> 1)
+    GROUP BY id_line_oe
+) rc ON rc.id_line_oe = ol.id_line_oe
+WHERE ol.id_order = %s
+  AND ol.part_color IS NOT NULL AND TRIM(ol.part_color) <> ''
+GROUP BY TRIM(ol.part_description), TRIM(ol.part_color)
+ORDER BY quantity DESC, product
+"""
+
+
+@app.get("/api/orders/{order_number}/items")
+def order_items(order_number: int, user: dict = Depends(verify_token)):
+    """Product/garment line items for an order the user is allowed to see.
+
+    Returns products only (color, quantity). Never exposes cost, price, or
+    margin columns. Decoration/service charge lines are excluded.
+    """
+    if not _user_can_see_order(user, order_number):
+        return {"items": []}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(_ITEMS_SQL, (order_number,))
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    items = []
+    for r in rows:
+        part = (r.get("part_number") or "").split("_")[0].strip()  # base style, drop size suffix
+        qty = r.get("quantity")
+        recv = r.get("received")
+        items.append({
+            "product": r.get("product") or "",
+            "part_number": part,
+            "color": r.get("color") or "",
+            "quantity": int(qty) if qty is not None else 0,
+            "received": int(recv) if recv is not None else 0,
+        })
+    return {"items": items}
+
+
 # ── Messaging (client <-> AE) ─────────────────────────────────────────────────
 
 class SendMessageRequest(BaseModel):

@@ -5,7 +5,7 @@
 > [Maintaining this document](#maintaining-this-document) and the
 > [Changelog](#changelog) at the bottom.
 
-Last updated: 2026-06-22
+Last updated: 2026-07-07
 
 ---
 
@@ -155,6 +155,7 @@ Company admins are restricted to their own company; super admins are unrestricte
 | GET | `/api/orders` | Order list (filters + year) |
 | GET | `/api/filters` | Distinct order types for filter dropdown |
 | GET | `/api/orders/{order_number}/tracking` | Live UPS tracking for an order |
+| GET | `/api/orders/{order_number}/items` | Product line items + received qty per line (products only, no pricing) |
 | POST | `/api/messages` | Client sends a message |
 | GET | `/api/messages/mine` | Client's own thread |
 | GET | `/api/messages/unread` | Unread count (client or staff) |
@@ -203,7 +204,7 @@ backend serves.
 | Component | Purpose |
 |-----------|---------|
 | `OrderTable.jsx` | The 7-column orders table + mobile cards, sorting, pagination (20/page), status badges, the `parseDesigns`/`isOverdue` helpers |
-| `OrderDetailDrawer.jsx` | Slide-in panel with full order detail, per-design status, and live UPS tracking |
+| `OrderDetailDrawer.jsx` | Slide-in panel, tabbed **Order Status / Items / Receiving**. Order Status holds per-design status, production timeline, status codes, details, shipping, live UPS tracking, notes; Items lists products; Receiving shows per-garment Received/Partial/Awaiting with received-vs-requested progress |
 | `StatsBar.jsx` | Compact stat pills (Total / In Progress / Shipped / On Hold / Overdue) |
 | `Sidebar.jsx` | Filter panel (desktop sidebar + mobile drawer) |
 | `ChatWidget.jsx` | Floating client chat: rule-based "Help" bot (no API/AI) + two-way "My AE" messaging |
@@ -234,9 +235,10 @@ global animations and component classes in `src/index.css`.
 ## 6. Data & databases
 
 - **`shopworks`** (read-only via the `swro` MySQL user): the live order data —
-  `orders`, `orderdes` (designs), `pack_import` (tracking numbers), `employee` (AEs),
-  `manifest` (carriers), `location`, plus `local_reference.order_type` for readable
-  type names.
+  `orders`, `orderdes` (designs), `order_lines_oe` (line items / products),
+  `line_receiving` (per-line received quantities; append log linked by `id_line_oe`),
+  `pack_import` (tracking numbers), `employee` (AEs), `manifest` (carriers),
+  `location`, plus `local_reference.order_type` for readable type names.
 - **`local_reference`** (read + write on specific tables): portal-owned tables —
   `clients`, `client_contacts`, `client_ae_access`, `client_company_access`.
   Note: the `swro` user has write access only on these named tables (granted
@@ -286,6 +288,23 @@ regenerate it after meaningful updates (see `docs/` for the generator note).
 
 ## Changelog
 
+- **2026-07-07** — Added **receiving data** and reorganized the order detail drawer
+  into tabs (**Order Status / Items / Receiving**). The `/items` endpoint now also
+  returns `received` per line, summed from `shopworks.line_receiving` (append log
+  linked by `id_line_oe`, archived rows excluded); the order line's own `_act`
+  columns are unpopulated, so `line_receiving` is the source of truth. The Receiving
+  tab shows each garment as Received (received ≥ requested), Partial (some), or
+  Awaiting (none), with received-vs-requested quantities and a progress bar. One
+  `/items` call powers both the Items and Receiving tabs. Mobile-verified (tabs and
+  content, no horizontal overflow at 360/390px).
+- **2026-07-06** — Added **product line items** to the order detail drawer. New
+  lazy-loaded endpoint `GET /api/orders/{order_number}/items` reads
+  `shopworks.order_lines_oe`, returning products only (product, color, quantity):
+  charge/service lines and all cost/price/margin columns are excluded, and
+  size-scale splits (e.g. `LS14004` / `LS14004_2X`) are merged by product + color.
+  Access is gated with the same company/contact/AE filter as tracking, so a client
+  can only see their own order's items. Frontend adds an "Items" section to
+  `OrderDetailDrawer.jsx` (mobile-verified, no horizontal overflow).
 - **2026-06-22** — Initial living documentation written. Covers current system:
   AE/company access, year selector, overdue tracking, one-row-per-order table with
   accurate ShopWorks status codes, per-design status, pagination, in-memory caching +
